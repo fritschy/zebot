@@ -205,8 +205,9 @@ impl MessageHandler {
         msg: &IRCMessage,
     ) -> std::io::Result<()> {
         println!(
-            "{}: {} {:?}",
+            "{}: {} {} {:?}",
             id,
+            msg.prefix,
             msg.command,
             msg.params
         );
