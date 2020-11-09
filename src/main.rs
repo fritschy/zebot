@@ -2,13 +2,6 @@ use std::{
     borrow::Cow,
     fmt::{Display, Formatter},
     io::Read,
-    net::{SocketAddr, TcpStream, ToSocketAddrs},
-};
-
-use smol::{
-    block_on, future,
-    io::{self, AsyncReadExt},
-    unblock, Async, Unblock,
 };
 
 use nom::bytes::complete::{is_not, take_while, take_while_m_n};
@@ -26,13 +19,7 @@ use nom::{
     multi::{count, many1},
     FindToken, IResult, Parser,
 };
-use smol::io::AsyncWriteExt;
-use smol::stream::StreamExt;
-use smol::future::FutureExt;
 use std::process::exit;
-
-#[macro_use]
-extern crate smol;
 
 struct IRCMessage<'a> {
     prefix: Cow<'a, str>,
@@ -48,7 +35,7 @@ impl<'a> Display for IRCMessage<'a> {
             "Message {{ {}, {}, {:?} }}",
             self.prefix,
             String::from_utf8_lossy(self.command),
-            String::from_utf8_lossy(self.data),
+            self.params,
         )
     }
 }
@@ -71,6 +58,7 @@ impl<'a> Display for IRCMessage<'a> {
 
 fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], IRCMessage> {
     let (r, i) = take_until("\r\n")(i)?;
+    let (r, _) = tag("\r\n")(r)?;
 
     let m = i;
 
@@ -84,17 +72,13 @@ fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], IRCMessage> {
     }
 
     let (i, pfx) = opt(prefix)(i)?;
-    let (i, command) = alt((take_while(is_alphabetic), take_while_m_n(3, 3, is_digit)))(i)?;
+    let (i, command) = alt((take_while_m_n(3, 3, is_digit), take_while(is_alphabetic)))(i)?;
 
     // let ps = tag(":").and(rest);
 
     fn middle(i: &[u8]) -> IResult<&[u8], &[u8]> {
-        if let Ok((i, _)) = none_of::<_, _, Error<_>>(":")(i) {
-            let (i, m) = take_while(|x| x != b' ' && x != 0 && x != b'\r' && x != b'\n')(i)?;
-            Ok((i, m))
-        } else {
-            Ok((i, &i[0..0]))
-        }
+        let (i, m) = take_while(|x| x != b' ' && x != 0 && x != b'\r' && x != b'\n')(i)?;
+        Ok((i, m))
     }
 
     fn param(i: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -110,12 +94,12 @@ fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], IRCMessage> {
         }
     }
 
-    // let (i, params) = map(many_till(param, eof), |x| {
-    //     x.0.into_iter()
-    //         .filter(|x| !x.is_empty())
-    //         .map(String::from_utf8_lossy)
-    //         .collect::<Vec<_>>()
-    // })(i)?;
+    let (i, params) = map(many_till(param, eof), |x| {
+        x.0.into_iter()
+            .filter(|x| !x.is_empty())
+            .map(String::from_utf8_lossy)
+            .collect::<Vec<_>>()
+    })(i)?;
 
     Ok((
         r,
@@ -123,7 +107,7 @@ fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], IRCMessage> {
             prefix: pfx.unwrap_or_default(),
             data: m,
             command,
-            params: Vec::new(),
+            params,
         },
     ))
 }
@@ -133,73 +117,101 @@ enum StreamID<T> {
     Server(T),
 }
 
-fn main() -> std::io::Result<()> {
-    block_on(async {
-        let mut addr = unblock(move || "irc.freenode.net:6667".to_socket_addrs())
-            .await?
-            .next()
-            .expect("Could not resolve host address");
-        let mut connection = Async::<TcpStream>::connect(addr).await?;
-        let mut stdin = Unblock::new(std::io::stdin());
-        let mut stdout = Unblock::new(std::io::stdout());
+use async_std::prelude::*;
 
-        let mut stdin_buf = vec![0u8; 1024];
-        let mut serve_buf = vec![0u8; 1024];
+use async_std::{
+    self as astd,
+    io,
+    stream::StreamExt,
+    task,
+    net::ToSocketAddrs,
+};
 
-        let mut count: usize = 0;
-        loop {
-            // Read from server and stdin simultaneously
-            let mut bytes = {
-                for i in stdin_buf.iter_mut() {
-                    *i = 0;
-                }
-                future::race(
-                    async {
-                        let mut off = 0;
-                        loop {
-                            let bytes = connection.read(&mut serve_buf[off..]).await?;
-                            off += bytes;
-                            if &serve_buf[off-2..off] == b"\r\n" {
-                                break;
-                            }
-                            dbg!(&serve_buf[..off]);
-                        }
-                        Ok::<_, std::io::Error>(StreamID::Server(&serve_buf[..off]))
-                    },
-                    async {
-                        stdout.write_all(b"> ").await?;
-                        stdout.flush().await?;
-                        let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
-                        Ok::<_, std::io::Error>(StreamID::Stdin(&stdin_buf[..bytes]))
-                    }
-                ).await?
+async fn async_main() -> std::io::Result<()> {
+    let mut addr = "irc.freenode.net:6667".to_socket_addrs()
+        .await?
+        .next()
+        .expect("Could not resolve host address");
+    let mut connection = astd::net::TcpStream::connect(addr).await?;
+    let mut stdin = astd::io::stdin();
+    let mut stdout = astd::io::stdout();
+
+    let mut stdin_buf = vec![0u8; 1024];
+    let mut serve_buf = vec![0u8; 1024];
+
+    // will contain remains of he last read that could not be parsed as a message...
+    let mut remaining_buf = Vec::new();
+
+    let mut count: usize = 0;
+    loop {
+        // Read from server and stdin simultaneously
+        let mut bytes = {
+            let a = async {
+                let off = if !remaining_buf.is_empty() {
+                    &mut serve_buf[..remaining_buf.len()].copy_from_slice(remaining_buf.as_slice());
+                    let off = remaining_buf.len();
+                    remaining_buf.clear();
+                    off
+                } else {
+                    0
+                };
+                let bytes = connection.read(&mut serve_buf.as_mut_slice()[off..]).await?;
+                Ok::<_, std::io::Error>(StreamID::Server(&serve_buf[..off + bytes]))
             };
 
-            match bytes {
-                StreamID::Server(buf) => {
-                    if let Ok((remain_buf, msg)) = message(buf) {
-                        count += 1;
+            let b = async {
+                stdout.write_all(b"> ").await?;
+                stdout.flush().await?;
+                let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
+                Ok::<_, std::io::Error>(StreamID::Stdin(&stdin_buf[..bytes]))
+            };
 
-                        println!("msg: {}", msg);
+            a.race(b).await
+        }?;
 
-                        if count == 2 {
-                            connection
-                                .write_all(b"USER ZeBot none none :ZeBot\r\n")
-                                .await?;
-                            connection.write_all(b"NICK ZeBot\r\n").await?;
+        match bytes {
+            StreamID::Server(buf) => {
+                let mut i = buf;
+                loop {
+                    match message(i) {
+                        Ok((r, msg)) => {
+                            i = r;
+                            count += 1;
+
+                            println!("msg: {}", msg);
+                            println!("remain_buf.len: {}", i.len());
+
+                            if count == 2 {
+                                connection
+                                    .write_all(b"USER ZeBot none none :ZeBot\r\n")
+                                    .await?;
+                                connection.write_all(b"NICK ZeBot\r\n").await?;
+                            }
+                        },
+
+                        Err(e) => {
+                            remaining_buf.reserve(i.len());
+                            for x in i {
+                                remaining_buf.push(*x);
+                            }
+                            break;
                         }
-                    } else {
-                        eprintln!("Got an error...");
                     }
                 }
-                StreamID::Stdin(buf) => {
-                    let x = String::from_utf8_lossy(buf);
-                    let x = x.trim_end();
-                    println!("Got from stdin: {}", x);
-                }
             }
-
+            StreamID::Stdin(buf) => {
+                let x = String::from_utf8_lossy(buf);
+                let x = x.trim_end();
+                println!("Got from stdin: {}", x);
+            }
         }
-        Ok(())
+
+    }
+    Ok(())
+}
+
+fn main() -> std::io::Result<()> {
+    task::block_on(async {
+        async_main().await
     })
 }
