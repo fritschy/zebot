@@ -1,30 +1,30 @@
 use std::{
     borrow::Cow,
     fmt::{Display, Formatter},
-    io::Read,
 };
 
-use nom::bytes::complete::{is_not, take_while, take_while_m_n};
-use nom::character::complete::none_of;
+use nom::bytes::complete::{take_while, take_while_m_n};
 use nom::character::{is_alphabetic, is_digit};
-use nom::combinator::{cond, eof, map, peek};
-use nom::lib::std::string::ParseError;
+use nom::combinator::{eof, map};
 use nom::multi::many_till;
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take, take_until},
-    character::complete::{alpha1, digit1},
-    combinator::{opt, rest},
+    bytes::complete::{tag, take_until},
+    combinator::{opt},
     error::Error,
-    multi::{count, many1},
-    FindToken, IResult, Parser,
+    IResult,
 };
-use std::process::exit;
+
+use async_std::{self as astd, net::ToSocketAddrs, task, prelude::*};
+
+enum StreamID<T> {
+    Stdin(T),
+    Server(T),
+}
 
 struct IRCMessage<'a> {
     prefix: Cow<'a, str>,
-    data: &'a [u8],
-    command: &'a [u8],
+    command: Cow<'a, str>,
     params: Vec<Cow<'a, str>>,
 }
 
@@ -34,33 +34,16 @@ impl<'a> Display for IRCMessage<'a> {
             f,
             "Message {{ {}, {}, {:?} }}",
             self.prefix,
-            String::from_utf8_lossy(self.command),
+            self.command,
             self.params,
         )
     }
 }
 
-// // :hitchcock.freenode.net NOTICE * :*** Looking up your hostname...
-// // :hitchcock.freenode.net NOTICE * :*** Checking Ident
-// // :hitchcock.freenode.net NOTICE * :*** Couldn't look up your hostname
-// // :hitchcock.freenode.net NOTICE * :*** No Ident response
-
-// fn message(i:&[u8]) -> std::io::Result<()> {
-//     let (i, pfx) = if i[0] == b':' {  // got prefix
-//         let prefix_len = i[1..].iter().take_while(|&x| *x != b' ').count();
-//         (&i[prefix_len+1..], &i[1..prefix_len+1])
-//     } else {
-//         (i, &i[0..0])
-//     };
-//     println!("prefix: '{}'", String::from_utf8_lossy(pfx));
-//     Ok(())
-// }
-
+// This is rather messy... see rfc1459
 fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], IRCMessage> {
     let (r, i) = take_until("\r\n")(i)?;
     let (r, _) = tag("\r\n")(r)?;
-
-    let m = i;
 
     fn prefix(i: &[u8]) -> IResult<&[u8], Cow<str>> {
         // let (i, _) = tag::<&str, &[u8], nom::error::Error<&[u8]>>(":")(i)?;
@@ -73,13 +56,7 @@ fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], IRCMessage> {
 
     let (i, pfx) = opt(prefix)(i)?;
     let (i, command) = alt((take_while_m_n(3, 3, is_digit), take_while(is_alphabetic)))(i)?;
-
-    // let ps = tag(":").and(rest);
-
-    fn middle(i: &[u8]) -> IResult<&[u8], &[u8]> {
-        let (i, m) = take_while(|x| x != b' ' && x != 0 && x != b'\r' && x != b'\n')(i)?;
-        Ok((i, m))
-    }
+    let command = String::from_utf8_lossy(command);
 
     fn param(i: &[u8]) -> IResult<&[u8], &[u8]> {
         if let Ok((i, _)) = tag::<_, _, Error<_>>(" ")(i) {
@@ -87,14 +64,14 @@ fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], IRCMessage> {
                 let (i, trailing) = take_while(|x| x != 0 && x != b'\r' && x != b'\n')(i)?;
                 Ok((i, trailing))
             } else {
-                middle(i)
+                take_while(|x| x != b' ' && x != 0 && x != b'\r' && x != b'\n')(i)  // middle
             }
         } else {
-            Ok((i, &i[0..0]))
+            Ok((i, &[]))
         }
     }
 
-    let (i, params) = map(many_till(param, eof), |x| {
+    let (_, params) = map(many_till(param, eof), |x| {
         x.0.into_iter()
             .filter(|x| !x.is_empty())
             .map(String::from_utf8_lossy)
@@ -105,30 +82,15 @@ fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], IRCMessage> {
         r,
         IRCMessage {
             prefix: pfx.unwrap_or_default(),
-            data: m,
             command,
             params,
         },
     ))
 }
 
-enum StreamID<T> {
-    Stdin(T),
-    Server(T),
-}
-
-use async_std::prelude::*;
-
-use async_std::{
-    self as astd,
-    io,
-    stream::StreamExt,
-    task,
-    net::ToSocketAddrs,
-};
-
-async fn async_main() -> std::io::Result<()> {
-    let mut addr = "irc.freenode.net:6667".to_socket_addrs()
+async fn async_main(handler: &mut MessageHandler) -> std::io::Result<()> {
+    let addr = "irc.freenode.net:6667"
+        .to_socket_addrs()
         .await?
         .next()
         .expect("Could not resolve host address");
@@ -145,8 +107,9 @@ async fn async_main() -> std::io::Result<()> {
     let mut count: usize = 0;
     loop {
         // Read from server and stdin simultaneously
-        let mut bytes = {
+        let bytes = {
             let a = async {
+                // Need to complete a previous message
                 let off = if !remaining_buf.is_empty() {
                     &mut serve_buf[..remaining_buf.len()].copy_from_slice(remaining_buf.as_slice());
                     let off = remaining_buf.len();
@@ -155,7 +118,11 @@ async fn async_main() -> std::io::Result<()> {
                 } else {
                     0
                 };
-                let bytes = connection.read(&mut serve_buf.as_mut_slice()[off..]).await?;
+
+                let bytes = connection
+                    .read(&mut serve_buf.as_mut_slice()[off..])
+                    .await?;
+
                 Ok::<_, std::io::Error>(StreamID::Server(&serve_buf[..off + bytes]))
             };
 
@@ -178,18 +145,10 @@ async fn async_main() -> std::io::Result<()> {
                             i = r;
                             count += 1;
 
-                            println!("msg: {}", msg);
-                            println!("remain_buf.len: {}", i.len());
+                            handler.handle(&mut connection, count, &msg)?;
+                        }
 
-                            if count == 2 {
-                                connection
-                                    .write_all(b"USER ZeBot none none :ZeBot\r\n")
-                                    .await?;
-                                connection.write_all(b"NICK ZeBot\r\n").await?;
-                            }
-                        },
-
-                        Err(e) => {
+                        Err(_) => {
                             remaining_buf.reserve(i.len());
                             for x in i {
                                 remaining_buf.push(*x);
@@ -200,18 +159,92 @@ async fn async_main() -> std::io::Result<()> {
                 }
             }
             StreamID::Stdin(buf) => {
+                if buf.is_empty() {
+                    connection.write_all(b"QUIT\r\n").await?;
+                    connection.shutdown(astd::net::Shutdown::Both)?;
+                    break;
+                }
+
                 let x = String::from_utf8_lossy(buf);
                 let x = x.trim_end();
                 println!("Got from stdin: {}", x);
             }
         }
-
     }
+
     Ok(())
 }
 
+#[derive(Clone, PartialEq)]
+enum Channel {
+    Name(String),
+}
+
+struct MessageHandler {
+    nick: String,
+    channels: Vec<Channel>,
+}
+
+impl MessageHandler {
+    fn with_nick(n: &str) -> Self {
+        MessageHandler {
+            nick: n.to_string(),
+            channels: Vec::new(),
+        }
+    }
+
+    fn channel(mut self, c: Channel) -> Self {
+        self.channels.push(c);
+        self
+    }
+
+    fn handle(
+        &mut self,
+        ret: &mut astd::net::TcpStream,
+        id: usize,
+        msg: &IRCMessage,
+    ) -> std::io::Result<()> {
+        println!(
+            "{}: {} {:?}",
+            id,
+            msg.command,
+            msg.params
+        );
+        match msg.command.as_bytes() {
+            b"PING" => {
+                let response = format!("PONG {}\r\n", msg.params[0]);
+                println!("Sending: {}", response);
+                astd::task::block_on(async { ret.write_all(response.as_bytes()).await })
+            }
+
+            _ => {
+                if id == 1 {
+                    // First message: "logon"
+                    astd::task::block_on(async {
+                        let msg = format!(
+                            "USER {} none none :The Bot\r\nNICK {}\r\n{}",
+                            self.nick,
+                            self.nick,
+                            self.channels.iter().fold(String::new(), |acc, x| {
+                                match x {
+                                    Channel::Name(n) => format!("{}JOIN {}\r\n", acc, n),
+                                }
+                            })
+                        );
+                        println!("Sending: {}", msg);
+                        ret.write_all(msg.as_bytes()).await
+                    })
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
 fn main() -> std::io::Result<()> {
-    task::block_on(async {
-        async_main().await
-    })
+    let mut msg_handler =
+        MessageHandler::with_nick("ZeBot").channel(Channel::Name("#zebot-test".to_string()));
+
+    task::block_on(async { async_main(&mut msg_handler).await })
 }
