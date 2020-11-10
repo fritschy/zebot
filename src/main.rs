@@ -95,7 +95,9 @@ async fn async_main(handler: &mut irc::handler::MessageHandler) -> std::io::Resu
 
                 let x = String::from_utf8_lossy(buf);
                 let x = x.trim_end();
-                println!("Got from stdin: {}", x);
+
+                let msg = format!("PRIVMSG #zebot-test :{}\r\n", x);
+                connection.write_all(msg.as_bytes()).await?;
             }
         }
     }
