@@ -1,4 +1,5 @@
-use async_std::{self as astd, task, prelude::*};
+use smol::io::AsyncWriteExt;
+use smol::future::block_on;
 
 #[derive(Clone, PartialEq)]
 pub(crate) enum Channel {
@@ -25,7 +26,7 @@ impl MessageHandler {
 
     pub(crate) fn handle(
         &mut self,
-        ret: &mut astd::net::TcpStream,
+        ret: &mut smol::Async<std::net::TcpStream>,
         id: usize,
         msg: &crate::irc::Message,
     ) -> std::io::Result<()> {
@@ -40,13 +41,13 @@ impl MessageHandler {
             crate::irc::CommandCode::Ping => {
                 let response = format!("PONG {}\r\n", msg.params[0]);
                 println!("Sending: {}", response);
-                task::block_on(async { ret.write_all(response.as_bytes()).await })
+                block_on(async { ret.write_all(response.as_bytes()).await })
             }
 
             _ => {
                 if id == 1 {
                     // First message: "logon"
-                    task::block_on(async {
+                    block_on(async {
                         let msg = format!(
                             "USER {} none none :The Bot\r\nNICK {}\r\n{}",
                             self.nick,

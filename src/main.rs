@@ -1,28 +1,32 @@
-use async_std::{
-    self as astd,
-    io,
-    net::{TcpStream, ToSocketAddrs},
-    task::block_on,
-    prelude::*
+mod irc;
+
+use smol::{
+    self,
+    Async,
+    future::{ block_on, FutureExt, },
+    io::AsyncReadExt,
+    io::AsyncWriteExt,
 };
+
 use irc::handler;
 
-mod irc;
+use std::{ net::{ TcpStream, ToSocketAddrs, }, };
 
 enum StreamID<T> {
     Stdin(T),
     Server(T),
 }
 
-async fn async_main(handler: &mut handler::MessageHandler) -> std::io::Result<()> {
+async fn async_main(handler: &mut irc::handler::MessageHandler) -> std::io::Result<()> {
     let addr = "irc.freenode.net:6667"
-        .to_socket_addrs()
-        .await?
+        .to_socket_addrs()?
         .next()
         .expect("Could not resolve host address");
-    let mut connection = TcpStream::connect(addr).await?;
-    let mut stdin = io::stdin();
-    let mut stdout = io::stdout();
+    let mut connection = Async::<TcpStream>::connect(addr).await?;
+    let stdin = std::io::stdin();
+    let mut stdin = Async::<std::io::StdinLock>::new(stdin.lock())?;
+    let stdout = std::io::stdout();
+    let mut stdout = Async::<std::io::StdoutLock>::new(stdout.lock())?;
 
     let mut stdin_buf = vec![0u8; 1024];
     let mut serve_buf = vec![0u8; 1024];
@@ -87,7 +91,6 @@ async fn async_main(handler: &mut handler::MessageHandler) -> std::io::Result<()
             StreamID::Stdin(buf) => {
                 if buf.is_empty() {
                     connection.write_all(b"QUIT\r\n").await?;
-                    connection.shutdown(astd::net::Shutdown::Both)?;
                     break;
                 }
 
