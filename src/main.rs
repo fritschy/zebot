@@ -5,9 +5,9 @@ use async_std::{
     task::block_on,
     prelude::*
 };
+use irc::handler;
 
 mod irc;
-mod handler;
 
 enum StreamID<T> {
     Stdin(T),

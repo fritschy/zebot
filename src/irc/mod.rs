@@ -20,6 +20,8 @@ use nom::{IResult, bytes::complete::{
     eof,
 }, branch::alt, AsChar};
 
+pub mod handler;
+
 pub enum CommandCode {
     Numeric(u32),
     Generic(String),  // Yeah ...
