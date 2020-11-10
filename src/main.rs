@@ -1,4 +1,10 @@
-use async_std::{self as astd, io, net::{TcpStream, ToSocketAddrs}, task, prelude::*};
+use async_std::{
+    self as astd,
+    io,
+    net::{TcpStream, ToSocketAddrs},
+    task::block_on,
+    prelude::*
+};
 
 mod irc;
 mod handler;
@@ -99,5 +105,5 @@ fn main() -> std::io::Result<()> {
     let mut msg_handler =
         handler::MessageHandler::with_nick("ZeBot").channel(handler::Channel::Name("#zebot-test".to_string()));
 
-    task::block_on(async { async_main(&mut msg_handler).await })
+    block_on(async { async_main(&mut msg_handler).await })
 }
