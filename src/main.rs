@@ -1,5 +1,3 @@
-mod irc;
-
 use smol::{
     self,
     Async,
@@ -7,8 +5,9 @@ use smol::{
     io::AsyncReadExt,
     io::AsyncWriteExt,
 };
-
 use irc::handler;
+
+mod irc;
 
 use std::{ net::{ TcpStream, ToSocketAddrs, }, };
 
