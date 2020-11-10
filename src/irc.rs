@@ -6,35 +6,81 @@ use std::{
     },
 };
 
-use nom::{
-    IResult,
-    bytes::complete::{
-        tag,
-        take_until,
-        take_while,
-        take_while_m_n,
-    },
-    multi::many_till,
-    character::{
-        is_alphabetic,
-        is_digit,
-    },
-    error::Error,
-    combinator::{
-        opt,
-        map,
-        eof,
-    },
-    branch::alt,
-};
+use nom::{IResult, bytes::complete::{
+    tag,
+    take_until,
+    take_while,
+    take_while_m_n,
+}, multi::many_till, character::{
+    is_alphabetic,
+    is_digit,
+}, error::Error, combinator::{
+    opt,
+    map,
+    eof,
+}, branch::alt, AsChar};
 
-pub struct IRCMessage<'a> {
+pub enum CommandCode {
+    Numeric(u32),
+    Generic(String),  // Yeah ...
+    PrivMsg,
+    Notice,
+    Nick,
+    Join,
+    Part,
+    Quit,
+    Mode,
+    Ping,
+}
+
+impl<'a> From<Cow<'a, str>> for CommandCode {
+    fn from(c: Cow<'a, str>) -> Self {
+        if c.len() == 3 && c.as_bytes().iter().all(|x| x.is_dec_digit()) {
+            CommandCode::Numeric(c.parse().unwrap())
+        } else {
+            match c.as_bytes() {
+                b"PRIVMSG" => CommandCode::PrivMsg,
+                b"NOTICE" => CommandCode::Notice,
+                b"NICK" => CommandCode::Nick,
+                b"JOIN" => CommandCode::Join,
+                b"PART" => CommandCode::Part,
+                b"QUIT" => CommandCode::Quit,
+                b"MODE" => CommandCode::Mode,
+                b"PING" => CommandCode::Ping,
+                _ => {
+                    eprintln!("WARNING: Fallback to generic CommandCode for {}", c);
+                    CommandCode::Generic(c.to_string())
+                },
+            }
+        }
+    }
+}
+
+impl Display for CommandCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CommandCode::PrivMsg => write!(f, "PRIVMSG")?,
+            CommandCode::Notice => write!(f, "NOTICE")?,
+            CommandCode::Nick => write!(f, "NICK")?,
+            CommandCode::Join => write!(f, "JOIN")?,
+            CommandCode::Part => write!(f, "PART")?,
+            CommandCode::Quit => write!(f, "QUIT")?,
+            CommandCode::Mode => write!(f, "MODE")?,
+            CommandCode::Ping => write!(f, "PING")?,
+            CommandCode::Numeric(n) => write!(f, "{:03}", n)?,
+            CommandCode::Generic(n) => write!(f, "{}", n)?,
+        }
+        Ok(())
+    }
+}
+
+pub struct Message<'a> {
     pub prefix: Cow<'a, str>,
-    pub command: Cow<'a, str>,
+    pub command: CommandCode,
     pub params: Vec<Cow<'a, str>>,
 }
 
-impl<'a> Display for IRCMessage<'a> {
+impl<'a> Display for Message<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -47,7 +93,7 @@ impl<'a> Display for IRCMessage<'a> {
 }
 
 // This is rather messy... see rfc1459
-pub(crate) fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], IRCMessage> {
+pub(crate) fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], Message> {
     let (r, i) = take_until("\r\n")(i)?;
     let (r, _) = tag("\r\n")(r)?;
 
@@ -86,9 +132,9 @@ pub(crate) fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], IRCMessage> {
 
     Ok((
         r,
-        IRCMessage {
+        Message {
             prefix: pfx.unwrap_or_default(),
-            command,
+            command: command.into(),
             params,
         },
     ))

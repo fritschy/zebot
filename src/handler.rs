@@ -27,7 +27,7 @@ impl MessageHandler {
         &mut self,
         ret: &mut astd::net::TcpStream,
         id: usize,
-        msg: &crate::irc::IRCMessage,
+        msg: &crate::irc::Message,
     ) -> std::io::Result<()> {
         println!(
             "{}: {} {} {:?}",
@@ -36,8 +36,8 @@ impl MessageHandler {
             msg.command,
             msg.params
         );
-        match msg.command.as_bytes() {
-            b"PING" => {
+        match msg.command {
+            crate::irc::CommandCode::Ping => {
                 let response = format!("PONG {}\r\n", msg.params[0]);
                 println!("Sending: {}", response);
                 task::block_on(async { ret.write_all(response.as_bytes()).await })
