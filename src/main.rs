@@ -8,109 +8,57 @@ use smol::{
     },
 };
 
-use irc::handler;
-
 mod irc;
 
-use std::net::{ TcpStream, ToSocketAddrs, };
+use std::net::{ ToSocketAddrs, };
 
-enum StreamID<T> {
-    Stdin(T),
-    Server(T),
-}
-
-async fn async_main(handler: &mut irc::handler::MessageHandler) -> std::io::Result<()> {
-    let addr = "irc.freenode.net:6667"
+async fn async_main() -> std::io::Result<()> {
+    let addr = std::env::args().skip(1).next().unwrap_or_else(|| "localhost:6667".to_string())
         .to_socket_addrs()?
         .next()
         .expect("Could not resolve host address");
-    let mut connection = Async::<TcpStream>::connect(addr).await?;
     let stdin = std::io::stdin();
     let mut stdin = Async::<std::io::StdinLock>::new(stdin.lock())?;
     let stdout = std::io::stdout();
     let mut stdout = Async::<std::io::StdoutLock>::new(stdout.lock())?;
 
     let mut stdin_buf = vec![0u8; 1024];
-    let mut serve_buf = vec![0u8; 1024];
 
-    // will contain remains of he last read that could not be parsed as a message...
-    let mut remaining_buf = Vec::new();
+    let context = irc::Context::connect(addr, irc::User::new("ZeBot", "The Bot", None)).await?;
 
-    let mut count: usize = 0;
-    loop {
+    context.join("#zebot-test");
+
+    context.logon().await?;
+
+    while !context.is_shutdown() {
         // Read from server and stdin simultaneously
-        let bytes = {
-            let a = async {
-                // Need to complete a previous message
-                let off = if !remaining_buf.is_empty() {
-                    &mut serve_buf[..remaining_buf.len()].copy_from_slice(remaining_buf.as_slice());
-                    let off = remaining_buf.len();
-                    remaining_buf.clear();
-                    off
-                } else {
-                    0
-                };
+        let b = async {
+            stdout.write_all(b"> ").await?;
+            stdout.flush().await?;
+            let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
 
-                let bytes = connection
-                    .read(&mut serve_buf.as_mut_slice()[off..])
-                    .await?;
-
-                Ok::<_, std::io::Error>(StreamID::Server(&serve_buf[..off + bytes]))
-            };
-
-            let b = async {
-                stdout.write_all(b"> ").await?;
-                stdout.flush().await?;
-                let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
-                Ok::<_, std::io::Error>(StreamID::Stdin(&stdin_buf[..bytes]))
-            };
-
-            a.race(b).await
-        }?;
-
-        match bytes {
-            StreamID::Server(buf) => {
-                let mut i = buf;
-                loop {
-                    match irc::message(i) {
-                        Ok((r, msg)) => {
-                            i = r;
-                            count += 1;
-
-                            handler.handle(&mut connection, count, &msg)?;
-                        }
-
-                        Err(_) => {
-                            remaining_buf.reserve(i.len());
-                            for x in i {
-                                remaining_buf.push(*x);
-                            }
-                            break;
-                        }
-                    }
-                }
+            if bytes == 0 {
+                context.quit();
+                return Ok(());
             }
-            StreamID::Stdin(buf) => {
-                if buf.is_empty() {
-                    connection.write_all(b"QUIT\r\n").await?;
-                    break;
-                }
 
-                let x = String::from_utf8_lossy(buf);
-                let x = x.trim_end();
+            let bytes = &stdin_buf[..bytes];
 
-                let msg = format!("PRIVMSG #zebot-test :{}\r\n", x);
-                connection.write_all(msg.as_bytes()).await?;
-            }
-        }
+            let x = String::from_utf8_lossy(bytes);
+            let x = x.trim_end();
+
+            context.message("#zebot-test", x);
+
+            Ok(())
+        };
+
+        context.update().race(b).await?;
     }
 
-    Ok(())
+    // One last update to send pending messages...
+    context.update().await
 }
 
 fn main() -> std::io::Result<()> {
-    let mut msg_handler =
-        handler::MessageHandler::with_nick("ZeBot").channel(handler::Channel::Name("#zebot-test".to_string()));
-
-    block_on(async { async_main(&mut msg_handler).await })
+    block_on(async { async_main().await })
 }
