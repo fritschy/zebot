@@ -18,7 +18,7 @@ use nom::{IResult, bytes::complete::{
     opt,
     map,
     eof,
-}, branch::alt, AsChar};
+}, branch::alt};
 
 pub mod handler;
 
@@ -37,8 +37,10 @@ pub enum CommandCode {
 
 impl<'a> From<Cow<'a, str>> for CommandCode {
     fn from(c: Cow<'a, str>) -> Self {
-        if c.len() == 3 && c.as_bytes().iter().all(|x| x.is_dec_digit()) {
-            CommandCode::Numeric(c.parse().unwrap())
+        if c.len() == 3 && c.as_bytes().iter().all(|x| x.is_ascii_digit()) {
+            CommandCode::Numeric(c.as_bytes().iter().rev().enumerate().fold(0u32, |acc, x| {
+                acc + (*x.1 - b'0') as u32 * 10u32.pow(x.0 as u32)
+            }))
         } else {
             match c.as_bytes() {
                 b"PRIVMSG" => CommandCode::PrivMsg,
