@@ -6,19 +6,27 @@ use std::{
     },
 };
 
-use nom::{IResult, bytes::complete::{
-    tag,
-    take_until,
-    take_while,
-    take_while_m_n,
-}, multi::many_till, character::{
-    is_alphabetic,
-    is_digit,
-}, error::Error, combinator::{
-    opt,
-    map,
-    eof,
-}, branch::alt};
+use nom::{
+    IResult,
+    bytes::complete::{
+        tag,
+        take_until,
+        take_while,
+        take_while_m_n,
+    },
+    multi::many_till,
+    character::{
+        is_alphabetic,
+        is_digit,
+    },
+    error::Error,
+    combinator::{
+        opt,
+        map,
+        eof,
+    },
+    branch::alt
+};
 
 pub mod handler;
 

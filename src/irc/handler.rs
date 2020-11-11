@@ -1,5 +1,7 @@
-use smol::io::AsyncWriteExt;
-use smol::future::block_on;
+use smol::{
+    io::AsyncWriteExt,
+    future::block_on,
+};
 
 #[derive(Clone, PartialEq)]
 pub(crate) enum Channel {

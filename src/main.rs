@@ -2,14 +2,17 @@ use smol::{
     self,
     Async,
     future::{ block_on, FutureExt, },
-    io::AsyncReadExt,
-    io::AsyncWriteExt,
+    io::{
+        AsyncReadExt,
+        AsyncWriteExt,
+    },
 };
+
 use irc::handler;
 
 mod irc;
 
-use std::{ net::{ TcpStream, ToSocketAddrs, }, };
+use std::net::{ TcpStream, ToSocketAddrs, };
 
 enum StreamID<T> {
     Stdin(T),
