@@ -1,9 +1,5 @@
 use std::borrow::Cow;
-
-use std::fmt::{
-    Display,
-    Formatter,
-};
+use std::fmt::{Display, Formatter};
 
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub enum CommandCode {

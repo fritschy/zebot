@@ -1,9 +1,9 @@
 use smol::prelude::*;
-
 use smol::net::{SocketAddr, TcpStream};
 use smol::future::block_on;
-use std::collections::HashMap;
 use smol::io::AsyncWriteExt;
+
+use std::collections::HashMap;
 use std::io::{Stdout, Write};
 use std::cell::RefCell;
 
@@ -41,6 +41,13 @@ struct ReaderBuf {
 }
 
 impl ReaderBuf {
+    fn new() -> Self {
+        ReaderBuf {
+            buf: RefCell::new(vec![0; 4096]),
+            last: RefCell::new(Vec::new())
+        }
+    }
+
     fn fill_from_last(&self) -> usize {
         let len = self.last.borrow().len();
         if len > 0 {
@@ -70,7 +77,6 @@ impl ReaderBuf {
 }
 
 pub struct Context {
-    pub server: SocketAddr,
     pub user: User,
     pub channels: RefCell<Vec<String>>,
     pub joined_channels: RefCell<Vec<String>>,
@@ -85,8 +91,10 @@ pub struct Context {
 
 impl Context {
     pub async fn connect(addr: SocketAddr, user: User) -> Result<Self, std::io::Error> {
-        let connection = RefCell::new(TcpStream::connect(addr).await?);
-        connection.borrow_mut().set_nodelay(true)?;
+        let c = TcpStream::connect(addr).await?;
+        c.set_nodelay(true)?;
+
+        let connection = RefCell::new(c);
 
         let mut handlers: HashMap<CommandCode, Vec<Box<dyn MessageHandler>>> = HashMap::new();
         handlers.insert(CommandCode::Ping, vec![Box::new(PingHandler)]);
@@ -94,20 +102,17 @@ impl Context {
         let mut allmsg_handlers: Vec<Box<dyn MessageHandler>> = Vec::new();
         allmsg_handlers.push(Box::new(PrintMessageHandler::new()));
 
-        let bufs = ReaderBuf{buf: RefCell::new(vec![0; 4096]), last: RefCell::new(Vec::new())};
-
         Ok(Context {
-            server: addr,
-            user,
+            bufs: ReaderBuf::new(),
             channels: RefCell::new(Vec::new()),
+            count: RefCell::new(0),
             joined_channels: RefCell::new(Vec::new()),
-            handlers,
-            allmsg_handlers,
-            connection,
-            bufs,
             messages: RefCell::new(Vec::new()),
             shutdown: RefCell::new(false),
-            count: RefCell::new(0),
+            allmsg_handlers,
+            connection,
+            handlers,
+            user,
         })
     }
 
@@ -162,7 +167,10 @@ impl Context {
         if let CommandCode::Unknown = code {
             self.allmsg_handlers.push(h);
         } else {
-            self.handlers.entry(code).or_insert(vec![h]);
+            self.handlers
+                .entry(code)
+                .or_insert(Vec::with_capacity(1))
+                .push(h);
         }
     }
 
@@ -205,7 +213,7 @@ impl Context {
                         for h in x.iter() {
                             match h.handle(self, &msg)? {
                                 HandlerResult::Error(x) => eprintln!("Message handler errored: {}", x),
-                                HandlerResult::Handled => break,
+                                HandlerResult::Handled => break,  // Really?
                                 _ => (),
                             }
                         }

@@ -12,6 +12,7 @@ mod irc;
 use irc::*;
 
 use std::net::{ ToSocketAddrs, };
+use nom::AsChar;
 
 async fn async_main() -> std::io::Result<()> {
     let addr = std::env::args()
@@ -28,9 +29,11 @@ async fn async_main() -> std::io::Result<()> {
 
     let mut stdin_buf = vec![0u8; 1024];
 
-    let context = Context::connect(addr, User::new("ZeBot", "The Bot", None)).await?;
+    let mut context = Context::connect(addr, User::new("ZeBot", "The Bot", None)).await?;
 
     context.join("#zebot");
+    context.register_handler(CommandCode::PrivMsg, Box::new(FortuneHandler{}));
+    context.register_handler(CommandCode::PrivMsg, Box::new(QuestionHandler{}));
 
     context.logon().await?;
 
@@ -63,4 +66,92 @@ async fn async_main() -> std::io::Result<()> {
 
 fn main() -> std::io::Result<()> {
     block_on(async { async_main().await })
+}
+
+struct QuestionHandler;
+
+impl MessageHandler for QuestionHandler {
+    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+        if msg.prefix.is_none() {
+            return Ok(HandlerResult::NotInterested);
+        }
+
+        if msg.params.len() > 1 && msg.params[1..].iter().any(|x| x.contains("ZeBot")) {
+            // It would seem, I need some utility functions to retrieve message semantics
+            let m = format!("Hey {}!",
+                            msg.prefix
+                                .as_ref()
+                                .unwrap()
+                                .split("!")
+                                .next()
+                                .unwrap_or(msg.params[0].as_ref()));
+
+            let dst = if msg.params[0] == "ZeBot" {
+                msg.prefix
+                    .as_ref()
+                    .unwrap()
+                    .split("!")
+                    .next()
+                    .unwrap_or(msg.params[0].as_ref())
+            } else {
+                let x = &msg.params[0];
+                x.as_ref().splitn(1, "!").next().unwrap_or(x)
+            };
+
+            ctx.message(dst, m.as_str());
+        }
+
+        // Pretend we're not interested
+        Ok(HandlerResult::NotInterested)
+    }
+}
+
+struct FortuneHandler;
+
+impl MessageHandler for FortuneHandler {
+    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+        if msg.prefix.is_none() || msg.params.len() < 2 || msg.params[1] != "!fortune" {
+            return Ok(HandlerResult::NotInterested);
+        }
+
+        let dst = if msg.params[0] == "ZeBot" {
+            msg.prefix
+                .as_ref()
+                .unwrap()
+                .split("!")
+                .next()
+                .unwrap_or(msg.params[0].as_ref())
+        } else {
+            let x = &msg.params[0];
+            x.as_ref().splitn(1, "!").next().unwrap_or(x)
+        };
+
+        match std::process::Command::new("fortune").output() {
+            Ok(p) => {
+                ctx.message(dst, " ,--------");
+                for line in p.stdout
+                    .as_slice()
+                    .split(|x| *x == b'\n')
+                    .filter(|&x| x.len() > 0)
+                    .map(|x| x.iter().map(|&x| {
+                        if x.is_ascii_control() || x == b'\t' || x == b'\r' {
+                            ' '
+                        } else {
+                            x.as_char()
+                        }
+                    }).collect::<String>())
+                    .map(|x| {
+                        format!(" | {}", x)
+                    }){
+                    ctx.message(dst, line.as_ref());
+                }
+                ctx.message(dst, " `--------");
+            },
+            Err(e) => {
+                ctx.message(dst, e.to_string().as_str());
+            },
+        }
+
+        Ok(HandlerResult::NotInterested)
+    }
 }

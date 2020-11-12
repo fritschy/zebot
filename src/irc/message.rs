@@ -1,8 +1,3 @@
-use std::fmt::{
-    Display,
-    Formatter,
-};
-
 use nom::{
     IResult,
     bytes::complete::{
@@ -25,7 +20,9 @@ use nom::{
     branch::alt
 };
 
+use std::fmt::{Display, Formatter};
 use std::borrow::Cow;
+
 use crate::irc::*;
 
 #[derive(Debug)]
