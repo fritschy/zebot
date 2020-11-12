@@ -14,7 +14,10 @@ use irc::*;
 use std::net::{ ToSocketAddrs, };
 
 async fn async_main() -> std::io::Result<()> {
-    let addr = std::env::args().skip(1).next().unwrap_or_else(|| "localhost:6667".to_string())
+    let addr = std::env::args()
+        .skip(1)
+        .next()
+        .unwrap_or_else(|| "localhost:6667".to_string())
         .to_socket_addrs()?
         .next()
         .expect("Could not resolve host address");
@@ -27,7 +30,7 @@ async fn async_main() -> std::io::Result<()> {
 
     let context = Context::connect(addr, User::new("ZeBot", "The Bot", None)).await?;
 
-    context.join("#zebot-test");
+    context.join("#zebot");
 
     context.logon().await?;
 
@@ -47,8 +50,6 @@ async fn async_main() -> std::io::Result<()> {
 
             let x = String::from_utf8_lossy(bytes);
             let x = x.trim_end();
-
-            context.message("#zebot-test", x);
 
             Ok(())
         };
