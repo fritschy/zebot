@@ -16,6 +16,6 @@ select = "0.5"
 version = "0.10"
 features = [ "blocking" ]
 
-[profile.release]
-lto = true
-codegen-units = 1
+#[profile.release]
+#lto = true
+#codegen-units = 1

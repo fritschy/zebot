@@ -177,28 +177,15 @@ impl Context {
     }
 
     async fn send_pending_messages(&self) -> Result<(), std::io::Error> {
-        loop {
-            let msg_count = self.messages.borrow().len();
+        if self.messages.borrow().is_empty() {
+            return Ok(());
+        }
 
-            if msg_count == 0 {
-                break;
-            }
+        let mut connection = self.connection.borrow_mut();
 
-            // Send all queued messages
-            self.connection
-                .borrow_mut()
-                .write_all(
-                    self.messages
-                        .borrow_mut()
-                        .drain(..10.min(msg_count))
-                        .fold(String::new(), |acc, x| {
-                            format!("{}{}", acc, x)
-                        })
-                        .as_bytes())
-                .await?;
-
-            // FIXME: I feel I am missing something here...
-            smol::Timer::after(Duration::from_millis(100)).await;
+        for m in self.messages.borrow_mut().drain(..) {
+            connection.write_all(m.as_bytes()).await?;
+            smol::Timer::after(Duration::from_millis(200)).await;
         }
 
         Ok(())

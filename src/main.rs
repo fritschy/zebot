@@ -74,7 +74,7 @@ async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
             Ok(())
         };
 
-        context.update().race(b).await?;
+        context.update().or(b).await?;
     }
 
     // One last update to send pending messages...
