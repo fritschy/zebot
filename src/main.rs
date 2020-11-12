@@ -9,6 +9,7 @@ use smol::{
 };
 
 mod irc;
+use irc::*;
 
 use std::net::{ ToSocketAddrs, };
 
@@ -24,7 +25,7 @@ async fn async_main() -> std::io::Result<()> {
 
     let mut stdin_buf = vec![0u8; 1024];
 
-    let context = irc::Context::connect(addr, irc::User::new("ZeBot", "The Bot", None)).await?;
+    let context = Context::connect(addr, User::new("ZeBot", "The Bot", None)).await?;
 
     context.join("#zebot-test");
 
