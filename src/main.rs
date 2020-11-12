@@ -187,10 +187,7 @@ impl MessageHandler for MiscCommandsHandler {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
                 let m = &msg.params[1].as_ref();
                 if m.len() > 6 {
-                    let mut m = &m[6..];
-                    while !m.is_empty() && m.starts_with(" ") {
-                        m = &m[1..];
-                    }
+                    let m = m[6..].trim();
                     if !m.is_empty() {
                         ctx.message(&dst, &m);
                     }
