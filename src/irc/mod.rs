@@ -36,6 +36,22 @@ use smol::io::AsyncWriteExt;
 use std::io::{Stdout, Write};
 use std::cell::RefCell;
 
+pub trait Join<T, S = T> {
+    fn join(&self, sep: S) -> T;
+}
+
+impl<'a> Join<String, &str> for Vec<Cow<'a, str>> {
+    fn join(&self, sep: &str) -> String {
+        self.iter().fold(String::new(), |acc, x| {
+            if acc.is_empty() {
+                x.to_string()
+            } else {
+                acc + sep + x
+            }
+        })
+    }
+}
+
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub enum CommandCode {
     Numeric(u32),
@@ -106,10 +122,10 @@ impl<'a> Display for Message<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Message {{ {}, {}, {:?} }}",
+            "{}, {}, {}",
             self.prefix,
             self.command,
-            self.params,
+            self.params.join(" "),
         )
     }
 }
@@ -212,7 +228,7 @@ impl MessageHandler for PrintMessageHandler {
         let mut count = self.count.borrow_mut();
         *count += 1;
         let mut out = self.stdout.lock();
-        let m = format!("{:-5}: {} {} {:?}\n", count, msg.prefix, msg.command, msg.params);
+        let m = format!("{:-5}: {}\n", count, msg);
         out.write_all(m.as_bytes())?;
         Ok(HandlerResult::NotInterested)   // pretend to not be interested...
     }
@@ -414,7 +430,6 @@ impl Context {
 pub enum HandlerResult {
     Handled,
     NotInterested,
-    #[allow(unused)]
     Error(String),
 }
 
