@@ -147,7 +147,7 @@ impl MessageHandler for FortuneHandler {
 
         match std::process::Command::new("fortune").args(&["-asn", "500"]).output() {
             Ok(p) => {
-                ctx.message(&dst, " ,--------");
+                ctx.message(&dst, ",--------");
                 for line in p.stdout
                     .as_slice()
                     .split(|x| *x == b'\n')
@@ -161,11 +161,11 @@ impl MessageHandler for FortuneHandler {
                         }
                     }).collect::<String>())
                     .map(|x| {
-                        format!(" | {}", x)
+                        format!("| {}", x)
                     }){
                     ctx.message(&dst, line.as_ref());
                 }
-                ctx.message(&dst, " `--------");
+                ctx.message(&dst, "`--------");
             },
             Err(e) => {
                 ctx.message(&dst, e.to_string().as_str());
@@ -265,19 +265,19 @@ impl MessageHandler for GermanBashHandler {
 
                                 if let Some(first) = document.find(Attr("class", "zitat")).next() {
                                     if let Some(qid) = qid {
-                                        let h = format!(" ,--------[ {} ]", qid);
+                                        let h = format!(",--------[ {} ]", qid);
                                         ctx.message(&dst, &h);
                                     } else {
-                                        ctx.message(&dst, " ,--------");
+                                        ctx.message(&dst, ",--------");
                                     }
 
                                     for line in first.find(Attr("class", "quote_zeile"))
                                         .map(|x| x.text())
                                         .filter(|x| !x.trim().is_empty()) {
-                                        let line = format!(" | {}", line.trim());
+                                        let line = format!("| {}", line.trim());
                                         ctx.message(&dst, &line);
                                     }
-                                    ctx.message(&dst, " `--------");
+                                    ctx.message(&dst, "`--------");
                                 } else {
                                     eprintln!("Could not parse HTML");
                                     ctx.message(&dst, "Uhm, did not recognize the HTML ...");
