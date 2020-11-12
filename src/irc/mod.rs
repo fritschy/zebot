@@ -1,11 +1,10 @@
 use smol::prelude::*;
 use smol::net::{SocketAddr, TcpStream};
-use smol::future::block_on;
 use smol::io::AsyncWriteExt;
 
 use std::collections::HashMap;
 use std::io::{Stdout, Write};
-use std::cell::RefCell;
+use std::cell::{RefCell, Cell};
 
 mod message;
 pub(crate) use message::*;
@@ -85,8 +84,7 @@ pub struct Context {
     pub connection: RefCell<TcpStream>,
     bufs: ReaderBuf,
     messages: RefCell<Vec<String>>,
-    shutdown: RefCell<bool>,
-    count: RefCell<usize>,
+    shutdown: Cell<bool>,
 }
 
 impl Context {
@@ -105,15 +103,18 @@ impl Context {
         Ok(Context {
             bufs: ReaderBuf::new(),
             channels: RefCell::new(Vec::new()),
-            count: RefCell::new(0),
             joined_channels: RefCell::new(Vec::new()),
             messages: RefCell::new(Vec::new()),
-            shutdown: RefCell::new(false),
+            shutdown: Cell::new(false),
             allmsg_handlers,
             connection,
             handlers,
             user,
         })
+    }
+
+    pub fn nick(&self) -> &String {
+        &self.user.nick
     }
 
     pub fn join(&self, chan: &str) {
@@ -144,13 +145,13 @@ impl Context {
     }
 
     pub fn is_shutdown(&self) -> bool {
-        *self.shutdown.borrow()
+        self.shutdown.get()
     }
 
     pub fn quit(&self) {
-        *self.shutdown.borrow_mut() = true;
+        self.shutdown.replace(true);
         self.messages.borrow_mut().clear();
-        self.send("QUIT\r\n".to_string());
+        self.send("QUIT :Need to restart the Kubernetes VM\r\n".to_string());
     }
 
     pub fn send(&self, msg: String) {
@@ -204,8 +205,6 @@ impl Context {
             match message(i) {
                 Ok((r, msg)) => {
                     i = r;
-
-                    *self.count.borrow_mut() += 1;
 
                     for h in self.allmsg_handlers.iter() { h.handle(self, &msg)?; }
 

@@ -12,17 +12,14 @@ mod irc;
 use irc::*;
 
 use std::net::{ ToSocketAddrs, };
-use nom::AsChar;
-use std::error::Error;
 
-async fn async_main() -> std::io::Result<()> {
-    let addr = std::env::args()
-        .skip(1)
-        .next()
-        .unwrap_or_else(|| "localhost:6667".to_string())
+async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
+    let addr = args.value_of("server")
+        .unwrap()
         .to_socket_addrs()?
         .next()
         .expect("Could not resolve host address");
+
     let stdin = std::io::stdin();
     let mut stdin = Async::<std::io::StdinLock>::new(stdin.lock())?;
     let stdout = std::io::stdout();
@@ -30,12 +27,20 @@ async fn async_main() -> std::io::Result<()> {
 
     let mut stdin_buf = vec![0u8; 1024];
 
-    let mut context = Context::connect(addr, User::new("ZeBot", "The Bot", None)).await?;
+    let nick = args.value_of("nick").unwrap();
+    let user = args.value_of("user").unwrap();
+    let pass = args.value_of("pass");
+    let mut context = Context::connect(addr, User::new(nick, user, pass)).await?;
 
-    context.join("#zebot");
+    for i in args.value_of("channel").unwrap().split(|x| x == ',') {
+        context.join(i);
+    }
+
+    let current_channel = args.value_of("channel").unwrap().split(|x| x == ',').next().unwrap();
+
     context.register_handler(CommandCode::PrivMsg, Box::new(FortuneHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(QuestionHandler));
-    context.register_handler(CommandCode::PrivMsg, Box::new(HelpHandler));
+    context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ErrnoHandler));
 
     context.logon().await?;
@@ -43,7 +48,8 @@ async fn async_main() -> std::io::Result<()> {
     while !context.is_shutdown() {
         // Read from server and stdin simultaneously
         let b = async {
-            stdout.write_all(b"> ").await?;
+            let prompt = format!("{}\n> ", current_channel);
+            stdout.write_all(prompt.as_bytes()).await?;
             stdout.flush().await?;
             let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
 
@@ -57,6 +63,8 @@ async fn async_main() -> std::io::Result<()> {
             let x = String::from_utf8_lossy(bytes);
             let x = x.trim_end();
 
+            context.message(current_channel, x);
+
             Ok(())
         };
 
@@ -68,7 +76,29 @@ async fn async_main() -> std::io::Result<()> {
 }
 
 fn main() -> std::io::Result<()> {
-    block_on(async { async_main().await })
+    let m = clap::App::new("zebot")
+        .about("An IRC Bot")
+        .arg(clap::Arg::with_name("server")
+            .default_value("localhost:6667")
+            .short("s")
+            .long("server"))
+        .arg(clap::Arg::with_name("nick")
+            .default_value("ZeBot")
+            .short("n")
+            .long("nick"))
+        .arg(clap::Arg::with_name("user")
+            .default_value("The Bot")
+            .short("u")
+            .long("user"))
+        .arg(clap::Arg::with_name("pass")
+            .short("p")
+            .long("pass"))
+        .arg(clap::Arg::with_name("channel")
+            .default_value("#zebot-test")
+            .short("c")
+            .long("channel"))
+        .get_matches();
+    block_on(async move { async_main(m).await })
 }
 
 struct QuestionHandler;
@@ -79,7 +109,7 @@ impl MessageHandler for QuestionHandler {
             return Ok(HandlerResult::NotInterested);
         }
 
-        if msg.params.len() > 1 && msg.params[1..].iter().any(|x| x.contains("ZeBot")) {
+        if msg.params.len() > 1 && msg.params[1..].iter().any(|x| x.contains(ctx.nick())) {
             // It would seem, I need some utility functions to retrieve message semantics
             let m = format!("Hey {}!",
                             msg.prefix
@@ -103,7 +133,7 @@ struct FortuneHandler;
 
 impl MessageHandler for FortuneHandler {
     fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
-        if msg.prefix.is_none() || msg.params.len() < 2 || msg.params[1] != "!fortune" {
+        if msg.prefix.is_none() || msg.params.len() < 2 || !msg.params[1].starts_with("!fortune") {
             return Ok(HandlerResult::NotInterested);
         }
 
@@ -140,18 +170,22 @@ impl MessageHandler for FortuneHandler {
     }
 }
 
-struct HelpHandler;
+struct MiscCommandsHandler;
 
-impl MessageHandler for HelpHandler {
+impl MessageHandler for MiscCommandsHandler {
     fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() < 2 {
             return Ok(HandlerResult::NotInterested);
         }
 
-        match msg.params[1].as_ref() {
+        match msg.params[1].as_ref().split(" ").next().unwrap_or(msg.params[1].as_ref()) {
             "!help" | "!commands" => {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
                 ctx.message(&dst, "I am ZeBot, I can say Hello and answer to !fortune and !errno <int>");
+            }
+            "!exec" | "!sh" | "!shell" | "!powershell" | "!power-shell" => {
+                let m = format!("Na aber wer wird denn gleich, {}", msg.get_nick());
+                ctx.message(msg.get_reponse_destination(&ctx.joined_channels.borrow()).as_str(), &m);
             }
             _ => (),
         }

@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 nom = "6.0"
 smol = "1.2"
+clap = "2.33"
 
 [profile.release]
 lto = true
