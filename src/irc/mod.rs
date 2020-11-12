@@ -5,6 +5,7 @@ use smol::io::AsyncWriteExt;
 use std::collections::HashMap;
 use std::io::{Stdout, Write};
 use std::cell::{RefCell, Cell};
+use std::time::Duration;
 
 mod message;
 pub(crate) use message::*;
@@ -175,6 +176,34 @@ impl Context {
         }
     }
 
+    async fn send_pending_messages(&self) -> Result<(), std::io::Error> {
+        loop {
+            let msg_count = self.messages.borrow().len();
+
+            if msg_count == 0 {
+                break;
+            }
+
+            // Send all queued messages
+            self.connection
+                .borrow_mut()
+                .write_all(
+                    self.messages
+                        .borrow_mut()
+                        .drain(..10.min(msg_count))
+                        .fold(String::new(), |acc, x| {
+                            format!("{}{}", acc, x)
+                        })
+                        .as_bytes())
+                .await?;
+
+            // FIXME: I feel I am missing something here...
+            smol::Timer::after(Duration::from_millis(100)).await;
+        }
+
+        Ok(())
+    }
+
     pub async fn update(&self) -> Result<(), std::io::Error> {
         // Join channels we want to join...
         if !self.channels.borrow().is_empty() {
@@ -185,18 +214,7 @@ impl Context {
             self.send(joins);
         }
 
-        // Send all queued messages
-        self.connection
-            .borrow_mut()
-            .write_all(
-                self.messages
-                    .borrow_mut()
-                    .drain(..)
-                    .fold(String::new(), |acc, x| {
-                        format!("{}{}", acc, x)
-                    })
-                    .as_bytes())
-            .await?;
+        self.send_pending_messages().await?;
 
         let bytes = self.bufs.read_from(&mut self.connection.borrow_mut()).await?;
 

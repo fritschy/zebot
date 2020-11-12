@@ -13,6 +13,11 @@ use irc::*;
 
 use std::net::{ ToSocketAddrs, };
 
+use reqwest;
+
+use select::document::Document;
+use select::predicate::{Attr, Name, Predicate};
+
 async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args.value_of("server")
         .unwrap()
@@ -44,6 +49,7 @@ async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
     context.register_handler(CommandCode::PrivMsg, Box::new(QuestionHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ErrnoHandler));
+    context.register_handler(CommandCode::PrivMsg, Box::new(GermanBashHandler));
 
     while !context.is_shutdown() {
         // Read from server and stdin simultaneously
@@ -181,7 +187,7 @@ impl MessageHandler for MiscCommandsHandler {
         match msg.params[1].as_ref().split(" ").next().unwrap_or(msg.params[1].as_ref()) {
             "!help" | "!commands" => {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-                ctx.message(&dst, "I am ZeBot, I can say Hello and answer to !fortune, !echo and !errno <int>");
+                ctx.message(&dst, "I am ZeBot, I can say Hello and answer to !fortune, !bash, !echo and !errno <int>");
             }
             "!echo" => {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
@@ -226,6 +232,71 @@ impl MessageHandler for ErrnoHandler {
                     let m = format!("{}: {}", msg.get_nick(), e.to_string());
                     ctx.message(&dst, m.as_str());
                 }
+            }
+        }
+
+        Ok(HandlerResult::NotInterested)
+    }
+}
+
+struct GermanBashHandler;
+
+impl MessageHandler for GermanBashHandler {
+    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+        if msg.params.len() < 2 {
+            return Ok(HandlerResult::NotInterested);
+        }
+
+        if msg.params[1].as_ref().starts_with("!bash") {
+            let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+            let client = reqwest::blocking::ClientBuilder::new()
+                .timeout(std::time::Duration::from_secs(5))
+                .build();
+            if let Ok(client) = client {
+                match client.get("http://german-bash.org/action/random").send() {
+                    Ok(r) => {
+                        match r.text() {
+                            Ok(html) => {
+                                let document = Document::from(html.as_str());
+
+                                // to find the quote ID
+                                let num = document.find(Attr("class", "quotebox").descendant(Name("a"))).next();
+                                let qid = num.map(|x| x.attr("name")).flatten();
+
+                                if let Some(first) = document.find(Attr("class", "zitat")).next() {
+                                    if let Some(qid) = qid {
+                                        let h = format!(" ,--------[ {} ]", qid);
+                                        ctx.message(&dst, &h);
+                                    } else {
+                                        ctx.message(&dst, " ,--------");
+                                    }
+
+                                    for line in first.find(Attr("class", "quote_zeile"))
+                                        .map(|x| x.text())
+                                        .filter(|x| !x.trim().is_empty()) {
+                                        let line = format!(" | {}", line.trim());
+                                        ctx.message(&dst, &line);
+                                    }
+                                    ctx.message(&dst, " `--------");
+                                } else {
+                                    eprintln!("Could not parse HTML");
+                                    ctx.message(&dst, "Uhm, did not recognize the HTML ...");
+                                }
+                            },
+                            Err(e) => {
+                                ctx.message(&dst, "That did not work as expected...");
+                                eprintln!("{:?}", e)
+                            },
+                        };
+                    },
+                    Err(e) => {
+                        ctx.message(&dst, "That did not work as expected...");
+                        eprintln!("{:?}", e)
+                    },
+                }
+            } else {
+                ctx.message(&dst, "That did not work as expected...");
+                eprintln!("Could not create client")
             }
         }
 
