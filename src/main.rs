@@ -38,17 +38,17 @@ async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
 
     let current_channel = args.value_of("channel").unwrap().split(|x| x == ',').next().unwrap();
 
+    context.logon();
+
     context.register_handler(CommandCode::PrivMsg, Box::new(FortuneHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(QuestionHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ErrnoHandler));
 
-    context.logon().await?;
-
     while !context.is_shutdown() {
         // Read from server and stdin simultaneously
         let b = async {
-            let prompt = format!("{}\n> ", current_channel);
+            let prompt = format!("{}> ", current_channel);
             stdout.write_all(prompt.as_bytes()).await?;
             stdout.flush().await?;
             let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
@@ -181,7 +181,20 @@ impl MessageHandler for MiscCommandsHandler {
         match msg.params[1].as_ref().split(" ").next().unwrap_or(msg.params[1].as_ref()) {
             "!help" | "!commands" => {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-                ctx.message(&dst, "I am ZeBot, I can say Hello and answer to !fortune and !errno <int>");
+                ctx.message(&dst, "I am ZeBot, I can say Hello and answer to !fortune, !echo and !errno <int>");
+            }
+            "!echo" => {
+                let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                let m = &msg.params[1].as_ref();
+                if m.len() > 6 {
+                    let mut m = &m[6..];
+                    while !m.is_empty() && m.starts_with(" ") {
+                        m = &m[1..];
+                    }
+                    if !m.is_empty() {
+                        ctx.message(&dst, &m);
+                    }
+                }
             }
             "!exec" | "!sh" | "!shell" | "!powershell" | "!power-shell" => {
                 let m = format!("Na aber wer wird denn gleich, {}", msg.get_nick());

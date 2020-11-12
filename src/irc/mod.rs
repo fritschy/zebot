@@ -132,7 +132,7 @@ impl Context {
         }
     }
 
-    pub async fn logon(&self) -> Result<(), std::io::Error> {
+    pub fn logon(&self) {
         let msg = format!(
             "USER {} none none :The Bot\r\nNICK :{}\r\n",
             self.user.nick,
@@ -141,7 +141,7 @@ impl Context {
 
         println!("Logging on with {} as {}", self.user.user, self.user.nick);
 
-        self.connection.borrow_mut().write_all(msg.as_bytes()).await
+        self.send(msg);
     }
 
     pub fn is_shutdown(&self) -> bool {
@@ -176,6 +176,15 @@ impl Context {
     }
 
     pub async fn update(&self) -> Result<(), std::io::Error> {
+        // Join channels we want to join...
+        if !self.channels.borrow().is_empty() {
+            let joins = self.channels.borrow().iter().fold(String::new(), |acc, x| {
+                format!("{}JOIN :{}\r\n", acc, x)
+            });
+            self.joined_channels.borrow_mut().append(&mut self.channels.borrow_mut());
+            self.send(joins);
+        }
+
         // Send all queued messages
         self.connection
             .borrow_mut()
@@ -188,15 +197,6 @@ impl Context {
                     })
                     .as_bytes())
             .await?;
-
-        // Join channels we want to join...
-        if !self.channels.borrow().is_empty() {
-            let joins = self.channels.borrow().iter().fold(String::new(), |acc, x| {
-                format!("{}JOIN :{}\r\n", acc, x)
-            });
-            self.joined_channels.borrow_mut().append(&mut self.channels.borrow_mut());
-            self.send(joins);
-        }
 
         let bytes = self.bufs.read_from(&mut self.connection.borrow_mut()).await?;
 
