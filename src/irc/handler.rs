@@ -25,13 +25,9 @@ impl MessageHandler for PingHandler {
 
         let resp = format!("PONG {} :{}\r\n", dst, dst);
 
-        block_on(
-            async {
-                ctx.connection
-                    .borrow_mut()
-                    .write_all(resp.as_bytes())
-                    .await
-            }).map(|_| HandlerResult::Handled)
+        ctx.send(resp);
+
+        Ok(HandlerResult::Handled)
     }
 }
 

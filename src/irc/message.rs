@@ -34,19 +34,21 @@ pub struct Message<'a> {
 
 impl<'a> Message<'a> {
     pub fn get_reponse_destination(&self, channels: &Vec<String>) -> String {
-        dbg!(channels);
-        dbg!(self);
         if channels.iter().any(|x| x.as_str() == self.params[0]) {
             self.params[0].to_string()
         } else {
-            self.prefix
-                .as_ref()
-                .unwrap()
-                .split("!")
-                .next()
-                .unwrap_or(self.prefix.as_ref().unwrap())
-                .to_string()
+            self.get_nick()
         }
+    }
+
+    pub fn get_nick(&self) -> String {
+        self.prefix
+            .as_ref()
+            .unwrap()
+            .split("!")
+            .next()
+            .unwrap_or(self.prefix.as_ref().unwrap())
+            .to_string()
     }
 }
 

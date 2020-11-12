@@ -13,6 +13,7 @@ use irc::*;
 
 use std::net::{ ToSocketAddrs, };
 use nom::AsChar;
+use std::error::Error;
 
 async fn async_main() -> std::io::Result<()> {
     let addr = std::env::args()
@@ -35,6 +36,7 @@ async fn async_main() -> std::io::Result<()> {
     context.register_handler(CommandCode::PrivMsg, Box::new(FortuneHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(QuestionHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(HelpHandler));
+    context.register_handler(CommandCode::PrivMsg, Box::new(ErrnoHandler));
 
     context.logon().await?;
 
@@ -107,7 +109,7 @@ impl MessageHandler for FortuneHandler {
 
         let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
 
-        match std::process::Command::new("fortune").args(&["-n", "500", "-s"]).output() {
+        match std::process::Command::new("fortune").args(&["-asn", "500"]).output() {
             Ok(p) => {
                 ctx.message(&dst, " ,--------");
                 for line in p.stdout
@@ -142,8 +144,6 @@ struct HelpHandler;
 
 impl MessageHandler for HelpHandler {
     fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
-        dbg!(&msg);
-
         if msg.params.len() < 2 {
             return Ok(HandlerResult::NotInterested);
         }
@@ -151,9 +151,38 @@ impl MessageHandler for HelpHandler {
         match msg.params[1].as_ref() {
             "!help" | "!commands" => {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-                ctx.message(&dst, "I am ZeBot, I can say Hello and answer to !fortune");
+                ctx.message(&dst, "I am ZeBot, I can say Hello and answer to !fortune and !errno <int>");
             }
             _ => (),
+        }
+
+        Ok(HandlerResult::NotInterested)
+    }
+}
+
+struct ErrnoHandler;
+
+impl MessageHandler for ErrnoHandler {
+    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+        if msg.params.len() < 2 {
+            return Ok(HandlerResult::NotInterested);
+        }
+
+        if msg.params[1].as_ref().starts_with("!errno ") {
+            if let Some(x) = msg.params[1].as_ref().split(" ").skip(1).next() {
+                if let Ok(n) = x.parse::<u32>() {
+                    let n = n as i32;
+                    let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                    let e = std::io::Error::from_raw_os_error(n);
+                    let e = if e.to_string().starts_with("Unknown error ") {
+                        "Unknown error".to_string()
+                    } else {
+                        e.to_string()
+                    };
+                    let m = format!("{}: {}", msg.get_nick(), e.to_string());
+                    ctx.message(&dst, m.as_str());
+                }
+            }
         }
 
         Ok(HandlerResult::NotInterested)
