@@ -17,6 +17,7 @@ pub enum CommandCode {
     Quit,
     Mode,
     Ping,
+    Error,
     Unknown,
 }
 
@@ -36,6 +37,7 @@ impl<'a> From<Cow<'a, str>> for CommandCode {
                 b"QUIT" => CommandCode::Quit,
                 b"MODE" => CommandCode::Mode,
                 b"PING" => CommandCode::Ping,
+                b"ERROR" => CommandCode::Error,
                 b"UNKNOWN" => CommandCode::Unknown,
                 _ => {
                     eprintln!("WARNING: Fallback to generic CommandCode for {}", c);
@@ -57,6 +59,7 @@ impl Display for CommandCode {
             CommandCode::Quit => write!(f, "QUIT")?,
             CommandCode::Mode => write!(f, "MODE")?,
             CommandCode::Ping => write!(f, "PING")?,
+            CommandCode::Error => write!(f, "ERROR")?,
             CommandCode::Unknown => write!(f, "UNKNOWN")?,
             CommandCode::Numeric(n) => write!(f, "{:03}", n)?,
             CommandCode::Generic(n) => write!(f, "{}", n)?,

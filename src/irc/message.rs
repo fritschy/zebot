@@ -28,21 +28,20 @@ use nom::{
 use std::borrow::Cow;
 use crate::irc::*;
 
+#[derive(Debug)]
 pub struct Message<'a> {
-    pub prefix: Cow<'a, str>,
+    pub prefix: Option<Cow<'a, str>>,
     pub command: CommandCode,
     pub params: Vec<Cow<'a, str>>,
 }
 
 impl<'a> Display for Message<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}, {}, {}",
-            self.prefix,
-            self.command,
-            self.params.join(" "),
-        )
+        if let Some(p) = &self.prefix {
+            write!(f, "{}: {} {}", p, self.command, self.params.join(" "))
+        } else {
+            write!(f, "{} {}", self.command, self.params.join(" "))
+        }
     }
 }
 
@@ -87,7 +86,7 @@ pub(crate) fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], Message> {
     Ok((
         r,
         Message {
-            prefix: pfx.unwrap_or_default(),
+            prefix: pfx,
             command: command.into(),
             params,
         },
