@@ -32,8 +32,9 @@ async fn async_main() -> std::io::Result<()> {
     let mut context = Context::connect(addr, User::new("ZeBot", "The Bot", None)).await?;
 
     context.join("#zebot");
-    context.register_handler(CommandCode::PrivMsg, Box::new(FortuneHandler{}));
-    context.register_handler(CommandCode::PrivMsg, Box::new(QuestionHandler{}));
+    context.register_handler(CommandCode::PrivMsg, Box::new(FortuneHandler));
+    context.register_handler(CommandCode::PrivMsg, Box::new(QuestionHandler));
+    context.register_handler(CommandCode::PrivMsg, Box::new(HelpHandler));
 
     context.logon().await?;
 
@@ -86,19 +87,9 @@ impl MessageHandler for QuestionHandler {
                                 .next()
                                 .unwrap_or(msg.params[0].as_ref()));
 
-            let dst = if msg.params[0] == "ZeBot" {
-                msg.prefix
-                    .as_ref()
-                    .unwrap()
-                    .split("!")
-                    .next()
-                    .unwrap_or(msg.params[0].as_ref())
-            } else {
-                let x = &msg.params[0];
-                x.as_ref().splitn(1, "!").next().unwrap_or(x)
-            };
+            let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
 
-            ctx.message(dst, m.as_str());
+            ctx.message(&dst, m.as_str());
         }
 
         // Pretend we're not interested
@@ -114,42 +105,55 @@ impl MessageHandler for FortuneHandler {
             return Ok(HandlerResult::NotInterested);
         }
 
-        let dst = if msg.params[0] == "ZeBot" {
-            msg.prefix
-                .as_ref()
-                .unwrap()
-                .split("!")
-                .next()
-                .unwrap_or(msg.params[0].as_ref())
-        } else {
-            let x = &msg.params[0];
-            x.as_ref().splitn(1, "!").next().unwrap_or(x)
-        };
+        let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
 
-        match std::process::Command::new("fortune").output() {
+        match std::process::Command::new("fortune").args(&["-n", "500", "-s"]).output() {
             Ok(p) => {
-                ctx.message(dst, " ,--------");
+                ctx.message(&dst, " ,--------");
                 for line in p.stdout
                     .as_slice()
                     .split(|x| *x == b'\n')
                     .filter(|&x| x.len() > 0)
                     .map(|x| x.iter().map(|&x| {
+                        // FIXME: Yeah this won't end well...
                         if x.is_ascii_control() || x == b'\t' || x == b'\r' {
                             ' '
                         } else {
-                            x.as_char()
+                            x as char
                         }
                     }).collect::<String>())
                     .map(|x| {
                         format!(" | {}", x)
                     }){
-                    ctx.message(dst, line.as_ref());
+                    ctx.message(&dst, line.as_ref());
                 }
-                ctx.message(dst, " `--------");
+                ctx.message(&dst, " `--------");
             },
             Err(e) => {
-                ctx.message(dst, e.to_string().as_str());
+                ctx.message(&dst, e.to_string().as_str());
             },
+        }
+
+        Ok(HandlerResult::NotInterested)
+    }
+}
+
+struct HelpHandler;
+
+impl MessageHandler for HelpHandler {
+    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+        dbg!(&msg);
+
+        if msg.params.len() < 2 {
+            return Ok(HandlerResult::NotInterested);
+        }
+
+        match msg.params[1].as_ref() {
+            "!help" | "!commands" => {
+                let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                ctx.message(&dst, "I am ZeBot, I can say Hello and answer to !fortune");
+            }
+            _ => (),
         }
 
         Ok(HandlerResult::NotInterested)

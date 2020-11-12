@@ -32,6 +32,24 @@ pub struct Message<'a> {
     pub params: Vec<Cow<'a, str>>,
 }
 
+impl<'a> Message<'a> {
+    pub fn get_reponse_destination(&self, channels: &Vec<String>) -> String {
+        dbg!(channels);
+        dbg!(self);
+        if channels.iter().any(|x| x.as_str() == self.params[0]) {
+            self.params[0].to_string()
+        } else {
+            self.prefix
+                .as_ref()
+                .unwrap()
+                .split("!")
+                .next()
+                .unwrap_or(self.prefix.as_ref().unwrap())
+                .to_string()
+        }
+    }
+}
+
 impl<'a> Display for Message<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(p) = &self.prefix {
