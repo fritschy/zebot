@@ -111,19 +111,9 @@ struct QuestionHandler;
 
 impl MessageHandler for QuestionHandler {
     fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
-        if msg.prefix.is_none() {
-            return Ok(HandlerResult::NotInterested);
-        }
-
         if msg.params.len() > 1 && msg.params[1..].iter().any(|x| x.contains(ctx.nick())) {
             // It would seem, I need some utility functions to retrieve message semantics
-            let m = format!("Hey {}!",
-                            msg.prefix
-                                .as_ref()
-                                .unwrap()
-                                .split("!")
-                                .next()
-                                .unwrap_or(msg.params[0].as_ref()));
+            let m = format!("Hey {}!", msg.get_nick());
 
             let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
 
@@ -139,7 +129,7 @@ struct FortuneHandler;
 
 impl MessageHandler for FortuneHandler {
     fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
-        if msg.prefix.is_none() || msg.params.len() < 2 || !msg.params[1].starts_with("!fortune") {
+        if msg.params.len() < 2 || !msg.params[1].starts_with("!fortune") {
             return Ok(HandlerResult::NotInterested);
         }
 
@@ -172,7 +162,7 @@ impl MessageHandler for FortuneHandler {
             },
         }
 
-        Ok(HandlerResult::NotInterested)
+        Ok(HandlerResult::Handled)
     }
 }
 
@@ -203,10 +193,10 @@ impl MessageHandler for MiscCommandsHandler {
                 let m = format!("Na aber wer wird denn gleich, {}", msg.get_nick());
                 ctx.message(msg.get_reponse_destination(&ctx.joined_channels.borrow()).as_str(), &m);
             }
-            _ => (),
+            _ => return Ok(HandlerResult::NotInterested),
         }
 
-        Ok(HandlerResult::NotInterested)
+        Ok(HandlerResult::Handled)
     }
 }
 
@@ -214,28 +204,26 @@ struct ErrnoHandler;
 
 impl MessageHandler for ErrnoHandler {
     fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
-        if msg.params.len() < 2 {
+        if msg.params.len() < 2 || !msg.params[1].as_ref().starts_with("!errno ") {
             return Ok(HandlerResult::NotInterested);
         }
 
-        if msg.params[1].as_ref().starts_with("!errno ") {
-            if let Some(x) = msg.params[1].as_ref().split(" ").skip(1).next() {
-                if let Ok(n) = x.parse::<u32>() {
-                    let n = n as i32;
-                    let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-                    let e = std::io::Error::from_raw_os_error(n);
-                    let e = if e.to_string().starts_with("Unknown error ") {
-                        "Unknown error".to_string()
-                    } else {
-                        e.to_string()
-                    };
-                    let m = format!("{}: {}", msg.get_nick(), e.to_string());
-                    ctx.message(&dst, m.as_str());
-                }
+        if let Some(x) = msg.params[1].as_ref().split(" ").skip(1).next() {
+            if let Ok(n) = x.parse::<u32>() {
+                let n = n as i32;
+                let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                let e = std::io::Error::from_raw_os_error(n);
+                let e = if e.to_string().starts_with("Unknown error ") {
+                    "Unknown error".to_string()
+                } else {
+                    e.to_string()
+                };
+                let m = format!("{}: {}", msg.get_nick(), e.to_string());
+                ctx.message(&dst, m.as_str());
             }
         }
 
-        Ok(HandlerResult::NotInterested)
+        Ok(HandlerResult::Handled)
     }
 }
 
@@ -243,7 +231,7 @@ struct GermanBashHandler;
 
 impl MessageHandler for GermanBashHandler {
     fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
-        if msg.params.len() < 2 && !msg.params[1].as_ref().starts_with("!bash") {
+        if msg.params.len() < 2 || !msg.params[1].as_ref().starts_with("!bash") {
             return Ok(HandlerResult::NotInterested);
         }
 
