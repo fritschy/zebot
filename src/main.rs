@@ -243,63 +243,83 @@ struct GermanBashHandler;
 
 impl MessageHandler for GermanBashHandler {
     fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
-        if msg.params.len() < 2 {
+        if msg.params.len() < 2 && !msg.params[1].as_ref().starts_with("!bash") {
             return Ok(HandlerResult::NotInterested);
         }
 
-        if msg.params[1].as_ref().starts_with("!bash") {
-            let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-            let client = reqwest::blocking::ClientBuilder::new()
-                .timeout(std::time::Duration::from_secs(5))
-                .build();
-            if let Ok(client) = client {
-                match client.get("http://german-bash.org/action/random").send() {
-                    Ok(r) => {
-                        match r.text() {
-                            Ok(html) => {
-                                let document = Document::from(html.as_str());
+        let client = reqwest::blocking::ClientBuilder::new()
+            .timeout(std::time::Duration::from_secs(3))
+            .build();
 
-                                // to find the quote ID
-                                let num = document.find(Attr("class", "quotebox").descendant(Name("a"))).next();
-                                let qid = num.map(|x| x.attr("name")).flatten();
+        let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+        let nick = msg.get_nick();
 
-                                if let Some(first) = document.find(Attr("class", "zitat")).next() {
-                                    if let Some(qid) = qid {
-                                        let h = format!(",--------[ {} ]", qid);
-                                        ctx.message(&dst, &h);
-                                    } else {
-                                        ctx.message(&dst, ",--------");
-                                    }
-
-                                    for line in first.find(Attr("class", "quote_zeile"))
-                                        .map(|x| x.text())
-                                        .filter(|x| !x.trim().is_empty()) {
-                                        let line = format!("| {}", line.trim());
-                                        ctx.message(&dst, &line);
-                                    }
-                                    ctx.message(&dst, "`--------");
-                                } else {
-                                    eprintln!("Could not parse HTML");
-                                    ctx.message(&dst, "Uhm, did not recognize the HTML ...");
-                                }
-                            },
-                            Err(e) => {
-                                ctx.message(&dst, "That did not work as expected...");
-                                eprintln!("{:?}", e)
-                            },
-                        };
-                    },
-                    Err(e) => {
-                        ctx.message(&dst, "That did not work as expected...");
-                        eprintln!("{:?}", e)
-                    },
-                }
-            } else {
+        let client = match client {
+            Ok(c) => c,
+            Err(e) => {
                 ctx.message(&dst, "That did not work as expected...");
-                eprintln!("Could not create client")
+                eprintln!("Could not create client");
+                return Ok(HandlerResult::Handled);
+            },
+        };
+
+        for i in 0.. {
+            let r = match client.get("http://german-bash.org/action/random").send() {
+                Ok(r) => r,
+                Err(e) => {
+                    ctx.message(&dst, "That did not work as expected...");
+                    eprintln!("{:?}", e);
+                    return Ok(HandlerResult::Handled);
+                }
+            };
+
+            let document = match r.text() {
+                Ok(html) => Document::from(html.as_str()),
+                Err(e) => {
+                    ctx.message(&dst, "That did not work as expected...");
+                    eprintln!("{:?}", e);
+                    return Ok(HandlerResult::Handled);
+                },
+            };
+
+            // to find the quote ID
+            let num = document.find(Attr("class", "quotebox").descendant(Name("a"))).next();
+            let qid = num.map(|x| x.attr("name")).flatten().map(|x| x.to_string());
+
+            let mut qlines = if let Some(first) = document.find(Attr("class", "zitat")).next() {
+                first
+                    .find(Attr("class", "quote_zeile"))
+                    .map(|x| x.text())
+                    .filter(|x| !x.trim().is_empty())
+            } else {
+                eprintln!("Could not parse HTML");
+                ctx.message(&dst, "Uhm, did not recognize the HTML ...");
+                return Ok(HandlerResult::Handled);
+            };
+
+            let lines = qlines.collect::<Vec<_>>();
+
+            if lines.len() < 10 {
+                if let Some(qid) = qid {
+                    let h = format!(",--------[ {} ]", qid);
+                    ctx.message(&dst, &h);
+                } else {
+                    ctx.message(&dst, ",--------");
+                }
+
+                for line in lines.iter() {
+                    let line = format!("| {}", line.trim());
+                    ctx.message(&dst, &line);
+                }
+
+                ctx.message(&dst, "`--------");
+
+                break;
             }
+
+            eprintln!("Need to request another quote, for the {} time", i+1);;
         }
 
-        Ok(HandlerResult::NotInterested)
+        Ok(HandlerResult::Handled)
     }
 }
