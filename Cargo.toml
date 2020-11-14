@@ -8,13 +8,11 @@ edition = "2018"
 
 [dependencies]
 nom = "6.0"
-smol = "1.2"
+tokio = { version = "*", features = [ "full" ] }
+futures-util = "*"
 clap = "2.33"
 select = "0.5"
-
-[dependencies.reqwest]
-version = "0.10"
-features = [ "blocking" ]
+reqwest = { version = "0.10", features = [ "blocking" ] }
 
 #[profile.release]
 #lto = true

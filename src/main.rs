@@ -1,13 +1,3 @@
-use smol::{
-    self,
-    Async,
-    future::{ block_on, FutureExt, },
-    io::{
-        AsyncReadExt,
-        AsyncWriteExt,
-    },
-};
-
 mod irc;
 use irc::*;
 
@@ -17,6 +7,8 @@ use reqwest;
 
 use select::document::Document;
 use select::predicate::{Attr, Name, Predicate};
+use tokio::io::{AsyncWriteExt, AsyncReadExt, AsyncWrite, AsyncRead};
+use futures_util::future::FutureExt;
 
 async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args.value_of("server")
@@ -25,10 +17,8 @@ async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
         .next()
         .expect("Could not resolve host address");
 
-    let stdin = std::io::stdin();
-    let mut stdin = Async::<std::io::StdinLock>::new(stdin.lock())?;
-    let stdout = std::io::stdout();
-    let mut stdout = Async::<std::io::StdoutLock>::new(stdout.lock())?;
+    let mut stdin = tokio::io::stdin();
+    let mut stdout = tokio::io::stdout();
 
     let mut stdin_buf = vec![0u8; 1024];
 
@@ -61,7 +51,7 @@ async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
 
             if bytes == 0 {
                 context.quit();
-                return Ok(());
+                return Ok::<_, std::io::Error>(());
             }
 
             let bytes = &stdin_buf[..bytes];
@@ -72,16 +62,26 @@ async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
             context.message(current_channel, x);
 
             Ok(())
+        }.fuse();
+
+        let a = context.update().fuse();
+
+        tokio::pin!(a, b);
+
+        tokio::select! {
+            _ = a => (),
+            _ = b => (),
         };
 
-        context.update().or(b).await?;
+        // context.update().or(b).await?;
     }
 
     // One last update to send pending messages...
     context.update().await
 }
 
-fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
     let m = clap::App::new("zebot")
         .about("An IRC Bot")
         .arg(clap::Arg::with_name("server")
@@ -104,7 +104,8 @@ fn main() -> std::io::Result<()> {
             .short("c")
             .long("channel"))
         .get_matches();
-    block_on(async move { async_main(m).await })
+
+    async_main(m).await
 }
 
 struct QuestionHandler;
@@ -305,7 +306,7 @@ impl MessageHandler for GermanBashHandler {
                 break;
             }
 
-            eprintln!("Need to request another quote, for the {} time", i+1);;
+            eprintln!("Need to request another quote, for the {} time", i+1);
         }
 
         Ok(HandlerResult::Handled)

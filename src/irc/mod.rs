@@ -1,7 +1,3 @@
-use smol::prelude::*;
-use smol::net::{SocketAddr, TcpStream};
-use smol::io::AsyncWriteExt;
-
 use std::collections::HashMap;
 use std::io::{Stdout, Write};
 use std::cell::{RefCell, Cell};
@@ -18,6 +14,9 @@ pub(crate) use command::*;
 
 mod handler;
 pub use handler::*;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::net::SocketAddr;
+use tokio::net::TcpStream;
 
 pub struct User {
     pub nick: String,
@@ -185,7 +184,7 @@ impl Context {
 
         for m in self.messages.borrow_mut().drain(..) {
             connection.write_all(m.as_bytes()).await?;
-            smol::Timer::after(Duration::from_millis(200)).await;
+            tokio::time::delay_for(Duration::from_millis(200)).await;
         }
 
         Ok(())
