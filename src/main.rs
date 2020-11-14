@@ -3,8 +3,6 @@ use irc::*;
 
 use std::net::{ ToSocketAddrs, };
 
-use reqwest;
-
 use select::document::Document;
 use select::predicate::{Attr, Name, Predicate};
 use tokio::io::{AsyncWriteExt, AsyncReadExt, AsyncWrite, AsyncRead};
@@ -236,40 +234,21 @@ impl MessageHandler for GermanBashHandler {
             return Ok(HandlerResult::NotInterested);
         }
 
-        let client = reqwest::blocking::ClientBuilder::new()
-            .timeout(std::time::Duration::from_secs(3))
-            .build();
-
         let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-        let nick = msg.get_nick();
-
-        let client = match client {
-            Ok(c) => c,
-            Err(e) => {
-                ctx.message(&dst, "That did not work as expected...");
-                eprintln!("Could not create client");
-                return Ok(HandlerResult::Handled);
-            },
-        };
 
         for i in 0.. {
-            let r = match client.get("http://german-bash.org/action/random").send() {
-                Ok(r) => r,
+            let text: String = match std::process::Command::new("wget")
+                    .args(&["-qO-", "-T3", "http://german-bash.org/action/random"])
+                    .output() {
+                Ok(p) => {
+                    String::from_utf8_lossy(p.stdout.as_slice()).into()
+                },
                 Err(e) => {
-                    ctx.message(&dst, "That did not work as expected...");
-                    eprintln!("{:?}", e);
-                    return Ok(HandlerResult::Handled);
-                }
-            };
-
-            let document = match r.text() {
-                Ok(html) => Document::from(html.as_str()),
-                Err(e) => {
-                    ctx.message(&dst, "That did not work as expected...");
-                    eprintln!("{:?}", e);
-                    return Ok(HandlerResult::Handled);
+                    return Ok(HandlerResult::Error("Could not fetch bash".to_string()));
                 },
             };
+
+            let document = Document::from(text.as_ref());
 
             // to find the quote ID
             let num = document.find(Attr("class", "quotebox").descendant(Name("a"))).next();

@@ -12,7 +12,6 @@ tokio = { version = "*", features = [ "full" ] }
 futures-util = "*"
 clap = "2.33"
 select = "0.5"
-reqwest = { version = "0.10", features = [ "blocking" ] }
 
 #[profile.release]
 #lto = true
