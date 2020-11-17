@@ -7,6 +7,12 @@ use select::document::Document;
 use select::predicate::{Attr, Name, Predicate};
 use tokio::io::{AsyncWriteExt, AsyncReadExt, AsyncWrite, AsyncRead};
 use futures_util::future::FutureExt;
+use std::collections::HashMap;
+use std::time::{Instant, Duration};
+use std::cell::RefCell;
+use select::node::Data::Comment;
+
+use humantime::format_duration;
 
 async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args.value_of("server")
@@ -38,6 +44,7 @@ async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ErrnoHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(GermanBashHandler));
+    context.register_handler(CommandCode::Unknown, Box::new(UserStatus::new()));
 
     while !context.is_shutdown() {
         // Read from server and stdin simultaneously
@@ -288,6 +295,125 @@ impl MessageHandler for GermanBashHandler {
             eprintln!("Need to request another quote, for the {} time", i+1);
         }
 
-        Ok(HandlerResult::Handled)
+        Ok(HandlerResult::NotInterested)
+    }
+}
+
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum UserEvent {
+    Joined,
+    Parted,
+}
+
+struct ChannelUsers {
+    channels: HashMap<String, (UserEvent, Instant)>,
+}
+
+impl ChannelUsers {
+    fn join(&mut self, user: &String) {
+        let now = Instant::now();
+        self.channels.insert(user.clone(), (UserEvent::Joined, now));
+    }
+    fn part(&mut self, user: &String) {
+        let now = Instant::now();
+        self.channels.insert(user.clone(), (UserEvent::Parted, now));
+    }
+}
+
+impl Default for ChannelUsers {
+    fn default() -> Self {
+        ChannelUsers {
+            channels: HashMap::new()
+        }
+    }
+}
+
+struct UserStatus {
+    channels: RefCell<HashMap<String, ChannelUsers>>,
+}
+
+impl UserStatus {
+    fn new() -> Self {
+        UserStatus {
+            channels: RefCell::new(HashMap::new()),
+        }
+    }
+}
+
+impl MessageHandler for UserStatus {
+    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+        match msg.command {
+            CommandCode::Numeric(353) => {
+                let mut c = self.channels.borrow_mut();
+                // Add all users on join to channel
+                for n in msg.params[3].to_string().split(|x| x == ' ') {
+                    let mut x = c
+                        .entry(msg.params[2].to_string())
+                        .or_insert(ChannelUsers::default());
+                    x.join(&n.to_string());
+                    eprintln!("> User {} joined on ZeBot join!", n);
+                }
+            }
+            CommandCode::Part => {
+                let nick = msg.get_nick();
+                let channel = msg.params[0].to_string();
+                let mut c = self.channels.borrow_mut();
+                let mut x = c
+                    .entry(channel)
+                    .or_insert(ChannelUsers::default());
+                x.part(&nick);
+                eprintln!("> User {} parted", &nick);
+            },
+            CommandCode::Nick => {
+                let nick = msg.get_nick();
+                let new_nick = msg.params[0].to_string();
+                let mut c = self.channels.borrow_mut();
+                for x in c.values_mut() {
+                    if let Some(u) = x.channels.get(&nick) {
+                        x.channels.insert(new_nick.clone(), (u.0, u.1));
+                    };
+                    x.channels.remove(&nick);
+                }
+                eprintln!("> User {} changed nick to {}", &nick, &new_nick);
+            },
+            CommandCode::Join => {
+                let nick = msg.get_nick();
+                let channel = msg.params[0].to_string();
+                let mut c = self.channels.borrow_mut();
+                let mut x = c
+                    .entry(channel)
+                    .or_insert(ChannelUsers::default());
+                x.join(&nick);
+                eprintln!("> User {} joined", &nick);
+            },
+            CommandCode::PrivMsg => {
+                let nick = msg.get_nick();
+                let p = msg.params[1..].join(" ");
+                if p.starts_with("!status ") {
+                    let qnick = &p[8..];
+                    if !qnick.is_empty() {
+                        let qnick = String::from(qnick);
+                        let channel = msg.params[0].to_string();
+                        self.channels.borrow().get(&channel).map(|cu| {
+                            if let Some(u) = cu.channels.get(&qnick) {
+                                let dur = Instant::now().checked_duration_since(u.1).unwrap();
+                                let dur = format_duration(Duration::from_secs(dur.as_secs()));
+                                let jp = match u.0 {
+                                    UserEvent::Joined => format!("{}, {} is here since {}", nick, qnick, dur),
+                                    UserEvent::Parted => format!("{}, {} was last here {} ago", nick, qnick, dur),
+                                };
+                                ctx.message(msg.params[0].as_ref(), &jp);
+                            } else {
+                                let m = format!("{}, I don't know who {} is", nick, qnick);
+                                ctx.message(msg.params[0].as_ref(), &m);
+                            }
+                        });
+                    }
+                }
+            },
+            _ => (),
+        }
+        Ok(HandlerResult::NotInterested)
     }
 }
