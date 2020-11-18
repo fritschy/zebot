@@ -37,14 +37,14 @@ async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
 
     let current_channel = args.value_of("channel").unwrap().split(|x| x == ',').next().unwrap();
 
-    context.logon();
-
     context.register_handler(CommandCode::PrivMsg, Box::new(FortuneHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(QuestionHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ErrnoHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(GermanBashHandler));
     context.register_handler(CommandCode::Unknown, Box::new(UserStatus::new()));
+
+    context.logon();
 
     while !context.is_shutdown() {
         // Read from server and stdin simultaneously
@@ -139,7 +139,9 @@ impl MessageHandler for FortuneHandler {
             return Ok(HandlerResult::NotInterested);
         }
 
-        let mut args = msg.params[1]
+        let mut args = vec!["-n", "300"];
+
+        args.extend(msg.params[1]
             .split_ascii_whitespace()
             .skip(1)
             .filter_map(|o| {
@@ -148,11 +150,7 @@ impl MessageHandler for FortuneHandler {
                 } else {
                     None
                 }
-            })
-            .collect::<Vec<_>>();
-
-        args.push("-n");
-        args.push("500");
+            }));
 
         eprintln!("Fortune args: {}", args.iter().fold(String::new(), |acc, &x| format!("{}{},", acc, x)));
 
@@ -316,7 +314,7 @@ impl MessageHandler for GermanBashHandler {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Debug,Clone, Eq, PartialEq)]
 enum UserEvent {
     Joined,
     Left,
@@ -334,18 +332,19 @@ impl UserEvent {
     }
 }
 
+#[derive(Debug)]
 struct ChannelUsers {
-    channels: HashMap<String, (UserEvent, Instant)>,
+    users: HashMap<String, (UserEvent, Instant)>,
 }
 
 impl ChannelUsers {
     fn join(&mut self, user: &str) {
         let now = Instant::now();
-        self.channels.insert(user.to_string(), (UserEvent::Joined, now));
+        self.users.insert(user.to_string(), (UserEvent::Joined, now));
     }
     fn leave(&mut self, user: &str) {
         let now = Instant::now();
-        if let Some(x) = self.channels.insert(user.to_string(), (UserEvent::Left, now)) {
+        if let Some(x) = self.users.insert(user.to_string(), (UserEvent::Left, now)) {
             match x.0 {
                 UserEvent::NickChangeFrom(o, _) => { self.leave(&o); }
                 UserEvent::NickChangeTo(o, _) => { self.leave(&o); },
@@ -354,7 +353,7 @@ impl ChannelUsers {
         }
     }
     fn duration(&self, user: &str) -> Duration {
-        if let Some(x) = self.channels.get(user) {
+        if let Some(x) = self.users.get(user) {
             let now = Instant::now();
             now.duration_since(x.1)
         } else {
@@ -366,11 +365,12 @@ impl ChannelUsers {
 impl Default for ChannelUsers {
     fn default() -> Self {
         ChannelUsers {
-            channels: HashMap::new()
+            users: HashMap::new()
         }
     }
 }
 
+#[derive(Debug)]
 struct UserStatus {
     channels: RefCell<HashMap<String, ChannelUsers>>,
 }
@@ -392,7 +392,7 @@ impl MessageHandler for UserStatus {
                 let x = c
                     .entry(msg.params[2].to_string())
                     .or_insert(ChannelUsers::default());
-                for n in msg.params[3].to_string().split(|x| x == ' ') {
+                for n in msg.params[3].to_string().split(|x| x == ' ').map(|x| x.trim_start_matches("@")) {
                     x.join(&n.to_string());
                     eprintln!("> User {} joined on ZeBot join!", n);
                 }
@@ -415,12 +415,12 @@ impl MessageHandler for UserStatus {
                 let mut c = self.channels.borrow_mut();
                 let now = Instant::now();
                 for x in c.values_mut() {
-                    if let Some(u) = x.channels.get(&nick).cloned() {
+                    if let Some(u) = x.users.get(&nick).cloned() {
                         // Add old duration too ...
                         let since = now.duration_since(u.1).add(u.0.duration());
                         let since = Duration::from_secs(since.as_secs());
-                        x.channels.insert(new_nick.clone(), (UserEvent::NickChangeFrom(nick.clone(), since), now));
-                        x.channels.insert(nick.clone(), (UserEvent::NickChangeTo(new_nick.clone(), since), now));
+                        x.users.insert(new_nick.clone(), (UserEvent::NickChangeFrom(nick.clone(), since), now));
+                        x.users.insert(nick.clone(), (UserEvent::NickChangeTo(new_nick.clone(), since), now));
                     };
                 }
                 eprintln!("> User {} changed nick to {}", &nick, &new_nick);
@@ -439,18 +439,20 @@ impl MessageHandler for UserStatus {
 
             CommandCode::PrivMsg => {
                 let nick = msg.get_nick();
-                if msg.params[1].starts_with("!status ") {
+                if msg.params[1].starts_with("!status-debug") {
+                    eprintln!("{:#?}", &self.channels.borrow());
+                } else if msg.params[1].starts_with("!status ") {
                     let qnick = &msg.params[1][8..];
                     if !qnick.is_empty() {
                         let qnick = String::from(qnick);
                         let channel = msg.params[0].to_string();
                         self.channels.borrow().get(&channel).map(|cu| {
-                            if let Some(u) = cu.channels.get(&qnick) {
+                            if let Some(u) = cu.users.get(&qnick) {
                                 let dur = Instant::now().checked_duration_since(u.1).unwrap();
                                 let jp = match &u.0 {
                                     UserEvent::Joined => {
                                         let dur = format_duration(Duration::from_secs(dur.as_secs()));
-                                        format!("{}, {} was here since {}", nick, qnick, dur)
+                                        format!("{}, {} was here for {}", nick, qnick, dur)
                                     },
                                     UserEvent::Left => {
                                         let dur = format_duration(Duration::from_secs(dur.as_secs()));
