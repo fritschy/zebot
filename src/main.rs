@@ -299,10 +299,12 @@ impl MessageHandler for GermanBashHandler {
 }
 
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 enum UserEvent {
     Joined,
-    Parted,
+    Left,
+    NickChangeFrom(String, Duration),
+    NickChangeTo(String, Duration),
 }
 
 struct ChannelUsers {
@@ -314,10 +316,22 @@ impl ChannelUsers {
         let now = Instant::now();
         self.channels.insert(user.clone(), (UserEvent::Joined, now));
     }
-    fn part(&mut self, user: &String) {
+    fn leave(&mut self, user: &String) {
         let now = Instant::now();
-        self.channels.insert(user.clone(), (UserEvent::Parted, now));
+        if let Some(x) = self.channels.insert(user.clone(), (UserEvent::Left, now)) {
+            match x.0 {
+                UserEvent::NickChangeFrom(o, _) => { self.leave(&o); }
+                UserEvent::NickChangeTo(o, _) => { self.leave(&o); },
+                _ => (),
+            }
+        }
     }
+    // fn nick(&mut self, old: &String, new: &String) {
+    //     let now = Instant::now();
+    //     if let Some(old) = self.channels.insert(new.clone(), (UserEvent::NickChange(Default::default()), now)) {
+    //         (*self.channels.get_mut(user)) = (old.0 + (now.duration_since(old.1)));
+    //     }
+    // }
 }
 
 impl Default for ChannelUsers {
@@ -347,45 +361,50 @@ impl MessageHandler for UserStatus {
                 let mut c = self.channels.borrow_mut();
                 // Add all users on join to channel
                 for n in msg.params[3].to_string().split(|x| x == ' ') {
-                    let mut x = c
+                    let x = c
                         .entry(msg.params[2].to_string())
                         .or_insert(ChannelUsers::default());
                     x.join(&n.to_string());
                     eprintln!("> User {} joined on ZeBot join!", n);
                 }
             }
-            CommandCode::Part => {
+
+            CommandCode::Part | CommandCode::Quit => {
                 let nick = msg.get_nick();
                 let channel = msg.params[0].to_string();
                 let mut c = self.channels.borrow_mut();
-                let mut x = c
+                let x = c
                     .entry(channel)
                     .or_insert(ChannelUsers::default());
-                x.part(&nick);
-                eprintln!("> User {} parted", &nick);
+                x.leave(&nick);
+                eprintln!("> User {} left ({})", &nick, msg.command);
             },
+
             CommandCode::Nick => {
                 let nick = msg.get_nick();
                 let new_nick = msg.params[0].to_string();
                 let mut c = self.channels.borrow_mut();
+                let now = Instant::now();
                 for x in c.values_mut() {
-                    if let Some(u) = x.channels.get(&nick) {
-                        x.channels.insert(new_nick.clone(), (u.0, u.1));
+                    if let Some(u) = x.channels.get(&nick).cloned() {
+                        x.channels.insert(new_nick.clone(), (UserEvent::NickChangeFrom(nick.clone(), now.duration_since(u.1)), now));
+                        x.channels.insert(nick.clone(), (UserEvent::NickChangeTo(new_nick.clone(), now.duration_since(u.1)), now));
                     };
-                    x.channels.remove(&nick);
                 }
                 eprintln!("> User {} changed nick to {}", &nick, &new_nick);
             },
+
             CommandCode::Join => {
                 let nick = msg.get_nick();
                 let channel = msg.params[0].to_string();
                 let mut c = self.channels.borrow_mut();
-                let mut x = c
+                let x = c
                     .entry(channel)
                     .or_insert(ChannelUsers::default());
                 x.join(&nick);
                 eprintln!("> User {} joined", &nick);
             },
+
             CommandCode::PrivMsg => {
                 let nick = msg.get_nick();
                 let p = msg.params[1..].join(" ");
@@ -398,9 +417,11 @@ impl MessageHandler for UserStatus {
                             if let Some(u) = cu.channels.get(&qnick) {
                                 let dur = Instant::now().checked_duration_since(u.1).unwrap();
                                 let dur = format_duration(Duration::from_secs(dur.as_secs()));
-                                let jp = match u.0 {
+                                let jp = match &u.0 {
                                     UserEvent::Joined => format!("{}, {} is here since {}", nick, qnick, dur),
-                                    UserEvent::Parted => format!("{}, {} was last here {} ago", nick, qnick, dur),
+                                    UserEvent::Left => format!("{}, {} was last seen {} ago", nick, qnick, dur),
+                                    UserEvent::NickChangeFrom(o, _d) => format!("{}, {} last changed his nick from {} about {} ago", nick, qnick, o, dur),
+                                    UserEvent::NickChangeTo(o, _d) => format!("{}, {} last changed his nick to {} about {} ago", nick, qnick, o, dur),
                                 };
                                 ctx.message(msg.params[0].as_ref(), &jp);
                             } else {
