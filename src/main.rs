@@ -139,9 +139,26 @@ impl MessageHandler for FortuneHandler {
             return Ok(HandlerResult::NotInterested);
         }
 
+        let mut args = msg.params[1]
+            .split_ascii_whitespace()
+            .skip(1)
+            .filter_map(|o| {
+                if o.starts_with("-") && o.len() > 1 && o[1..].chars().all(|o| o == 's' || o == 'o' || o == 'a') {
+                    Some(o)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        args.push("-n");
+        args.push("500");
+
+        eprintln!("Fortune args: {}", args.iter().fold(String::new(), |acc, &x| format!("{}{},", acc, x)));
+
         let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
 
-        match std::process::Command::new("fortune").args(&["-asn", "500"]).output() {
+        match std::process::Command::new("fortune").args(&args).output() {
             Ok(p) => {
                 ctx.message(&dst, ",--------");
                 for line in p.stdout
@@ -298,7 +315,6 @@ impl MessageHandler for GermanBashHandler {
         Ok(HandlerResult::NotInterested)
     }
 }
-
 
 #[derive(Clone, Eq, PartialEq)]
 enum UserEvent {
