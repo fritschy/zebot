@@ -5,12 +5,11 @@ use std::net::{ ToSocketAddrs, };
 
 use select::document::Document;
 use select::predicate::{Attr, Name, Predicate};
-use tokio::io::{AsyncWriteExt, AsyncReadExt, AsyncWrite, AsyncRead};
+use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use futures_util::future::FutureExt;
 use std::collections::HashMap;
 use std::time::{Instant, Duration};
 use std::cell::RefCell;
-use select::node::Data::Comment;
 
 use humantime::format_duration;
 
@@ -250,7 +249,7 @@ impl MessageHandler for GermanBashHandler {
                 Ok(p) => {
                     String::from_utf8_lossy(p.stdout.as_slice()).into()
                 },
-                Err(e) => {
+                Err(_e) => {
                     return Ok(HandlerResult::Error("Could not fetch bash".to_string()));
                 },
             };
@@ -261,7 +260,7 @@ impl MessageHandler for GermanBashHandler {
             let num = document.find(Attr("class", "quotebox").descendant(Name("a"))).next();
             let qid = num.map(|x| x.attr("name")).flatten().map(|x| x.to_string());
 
-            let mut qlines = if let Some(first) = document.find(Attr("class", "zitat")).next() {
+            let qlines = if let Some(first) = document.find(Attr("class", "zitat")).next() {
                 first
                     .find(Attr("class", "quote_zeile"))
                     .map(|x| x.text())
