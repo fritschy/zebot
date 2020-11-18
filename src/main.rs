@@ -12,6 +12,7 @@ use std::time::{Instant, Duration};
 use std::cell::RefCell;
 
 use humantime::format_duration;
+use std::ops::Add;
 
 async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args.value_of("server")
@@ -307,6 +308,16 @@ enum UserEvent {
     NickChangeTo(String, Duration),
 }
 
+impl UserEvent {
+    fn duration(&self) -> Duration {
+        match self {
+            UserEvent::NickChangeTo(_, d) => *d,
+            UserEvent::NickChangeFrom(_, d) => *d,
+            _ => Duration::default(),
+        }
+    }
+}
+
 struct ChannelUsers {
     channels: HashMap<String, (UserEvent, Instant)>,
 }
@@ -387,8 +398,11 @@ impl MessageHandler for UserStatus {
                 let now = Instant::now();
                 for x in c.values_mut() {
                     if let Some(u) = x.channels.get(&nick).cloned() {
-                        x.channels.insert(new_nick.clone(), (UserEvent::NickChangeFrom(nick.clone(), now.duration_since(u.1)), now));
-                        x.channels.insert(nick.clone(), (UserEvent::NickChangeTo(new_nick.clone(), now.duration_since(u.1)), now));
+                        // Add old duration too ...
+                        let since = now.duration_since(u.1).add(u.0.duration());
+                        let since = Duration::from_secs(since.as_secs());
+                        x.channels.insert(new_nick.clone(), (UserEvent::NickChangeFrom(nick.clone(), since), now));
+                        x.channels.insert(nick.clone(), (UserEvent::NickChangeTo(new_nick.clone(), since), now));
                     };
                 }
                 eprintln!("> User {} changed nick to {}", &nick, &new_nick);
@@ -407,21 +421,33 @@ impl MessageHandler for UserStatus {
 
             CommandCode::PrivMsg => {
                 let nick = msg.get_nick();
-                let p = msg.params[1..].join(" ");
-                if p.starts_with("!status ") {
-                    let qnick = &p[8..];
+                if msg.params[1].starts_with("!status ") {
+                    let qnick = &msg.params[1][8..];
                     if !qnick.is_empty() {
                         let qnick = String::from(qnick);
                         let channel = msg.params[0].to_string();
                         self.channels.borrow().get(&channel).map(|cu| {
                             if let Some(u) = cu.channels.get(&qnick) {
                                 let dur = Instant::now().checked_duration_since(u.1).unwrap();
-                                let dur = format_duration(Duration::from_secs(dur.as_secs()));
                                 let jp = match &u.0 {
-                                    UserEvent::Joined => format!("{}, {} is here since {}", nick, qnick, dur),
-                                    UserEvent::Left => format!("{}, {} was last seen {} ago", nick, qnick, dur),
-                                    UserEvent::NickChangeFrom(o, _d) => format!("{}, {} last changed his nick from {} about {} ago", nick, qnick, o, dur),
-                                    UserEvent::NickChangeTo(o, _d) => format!("{}, {} last changed his nick to {} about {} ago", nick, qnick, o, dur),
+                                    UserEvent::Joined => {
+                                        let dur = format_duration(Duration::from_secs(dur.as_secs()));
+                                        format!("{}, {} was here since {}", nick, qnick, dur)
+                                    },
+                                    UserEvent::Left => {
+                                        let dur = format_duration(Duration::from_secs(dur.as_secs()));
+                                        format!("{}, {} was last seen {} ago", nick, qnick, dur)
+                                    },
+                                    UserEvent::NickChangeFrom(o, d) => {
+                                        let d = format_duration(Duration::from_secs(d.as_secs() + dur.as_secs()));
+                                        let dur = format_duration(Duration::from_secs(dur.as_secs()));
+                                        format!("{}, {} last changed his nick from {} about {} ago, they where seen for {}", nick, qnick, o, dur, d)
+                                    },
+                                    UserEvent::NickChangeTo(o, d) => {
+                                        let d = format_duration(Duration::from_secs(d.as_secs() + dur.as_secs()));
+                                        let dur = format_duration(Duration::from_secs(dur.as_secs()));
+                                        format!("{}, {} last changed his nick to {} about {} ago, they where seen for {}", nick, qnick, o, dur, d)
+                                    },
                                 };
                                 ctx.message(msg.params[0].as_ref(), &jp);
                             } else {
