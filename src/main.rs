@@ -139,13 +139,14 @@ impl MessageHandler for FortuneHandler {
             return Ok(HandlerResult::NotInterested);
         }
 
-        let mut args = vec!["-n", "300"];
+        let mut args = Vec::new();
 
         args.extend(msg.params[1]
             .split_ascii_whitespace()
             .skip(1)
             .filter_map(|o| {
-                if o.starts_with("-") && o.len() > 1 && o[1..].chars().all(|o| o == 's' || o == 'o' || o == 'a') {
+                if (o.starts_with("-") && o.len() > 1 && o[1..].chars().all(|o| o == 's' || o == 'o' || o == 'a')) ||
+                  (!o.starts_with("-") && !o.chars().any(|x| x.is_ascii_control() || x.is_whitespace())) {
                     Some(o)
                 } else {
                     None
@@ -156,31 +157,54 @@ impl MessageHandler for FortuneHandler {
 
         let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
 
-        match std::process::Command::new("fortune").args(&args).output() {
-            Ok(p) => {
-                ctx.message(&dst, ",--------");
-                for line in p.stdout
-                    .as_slice()
-                    .split(|x| *x == b'\n')
-                    .filter(|&x| x.len() > 0)
-                    .map(|x| x.iter().map(|&x| {
-                        // FIXME: Yeah this won't end well...
-                        if x.is_ascii_control() || x == b'\t' || x == b'\r' {
-                            ' '
-                        } else {
-                            x as char
+        loop {
+            match std::process::Command::new("fortune").args(&args).output() {
+                Ok(p) => {
+                    let lines = p.stdout
+                        .as_slice()
+                        .split(|x| *x == b'\n')
+                        .filter(|&x| x.len() > 0)
+                        .map(|x|
+                            x.iter()
+                                .map(|&x| {
+                                    // FIXME: Yeah this won't end well...
+                                    if x.is_ascii_control() || x == b'\t' || x == b'\r' {
+                                        ' '
+                                    } else {
+                                        x as char
+                                    }
+                                }).collect::<String>())
+                        .collect::<Vec<_>>();
+
+                    if lines.len() > 9 {
+                        eprintln!("Requesting new, shorter fortune...");
+                        continue;
+                    }
+
+                    if lines.is_empty() {
+                        ctx.message(&dst, ",--------[ error ]--------");
+                        for l in p.stderr
+                            .as_slice()
+                            .split(|x| *x == b'\n')
+                            .filter(|&x| x.len() > 0) {
+                            let l = format!("| {}", String::from_utf8_lossy(l).as_ref());
+                            ctx.message(&dst, &l);
                         }
-                    }).collect::<String>())
-                    .map(|x| {
-                        format!("| {}", x)
-                    }){
-                    ctx.message(&dst, line.as_ref());
-                }
-                ctx.message(&dst, "`--------");
-            },
-            Err(e) => {
-                ctx.message(&dst, e.to_string().as_str());
-            },
+                    } else {
+                        ctx.message(&dst, ",--------");
+                        for l in lines.iter().map(|x| format!("| {}", x)) {
+                            ctx.message(&dst, l.as_ref());
+                        }
+                    }
+                    ctx.message(&dst, "`--------");
+
+                    break;
+                },
+                Err(e) => {
+                    ctx.message(&dst, e.to_string().as_str());
+                    break;
+                },
+            }
         }
 
         Ok(HandlerResult::Handled)
@@ -398,7 +422,7 @@ impl MessageHandler for UserStatus {
                 }
             }
 
-            CommandCode::Part | CommandCode::Quit => {
+            CommandCode::Part => {
                 let nick = msg.get_nick();
                 let channel = msg.params[0].to_string();
                 let mut c = self.channels.borrow_mut();
@@ -406,7 +430,15 @@ impl MessageHandler for UserStatus {
                     .entry(channel)
                     .or_insert(ChannelUsers::default());
                 x.leave(&nick);
-                eprintln!("> User {} left ({})", &nick, msg.command);
+                eprintln!("> User {} left", &nick);
+            },
+
+            CommandCode::Quit => {
+                let nick = msg.get_nick();
+                for c in self.channels.borrow_mut().iter_mut() {
+                    c.1.leave(&nick);
+                }
+                eprintln!("> User {} quit", &nick);
             },
 
             CommandCode::Nick => {
@@ -442,7 +474,7 @@ impl MessageHandler for UserStatus {
                 if msg.params[1].starts_with("!status-debug") {
                     eprintln!("{:#?}", &self.channels.borrow());
                 } else if msg.params[1].starts_with("!status ") {
-                    let qnick = &msg.params[1][8..];
+                    let qnick = msg.params[1][8..].trim();
                     if !qnick.is_empty() {
                         let qnick = String::from(qnick);
                         let channel = msg.params[0].to_string();
