@@ -13,6 +13,9 @@ use std::cell::RefCell;
 
 use humantime::format_duration;
 use std::ops::Add;
+use std::io::{BufReader, BufRead};
+use rand::prelude::IteratorRandom;
+use rand::{Rng, thread_rng};
 
 async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args.value_of("server")
@@ -113,17 +116,40 @@ async fn main() -> std::io::Result<()> {
     async_main(m).await
 }
 
+fn nag_user(nick: &str) -> String {
+    fn doit(nick: &str) -> Result<String, std::io::Error> {
+        let nick = nick.replace(|x:char| !x.is_alphanumeric(), "_");
+        let nag_file = format!("nag-{}.txt", nick);
+        let f = std::fs::File::open(&nag_file).map_err(|e| {
+            eprintln!("Could not open nag-file '{}'", &nag_file);
+            e
+        })?;
+        let br = BufReader::new(f);
+        let l = br.lines();
+        let m = l.choose(&mut thread_rng()).unwrap_or_else(|| Ok("...".to_string()))?;
+        Ok(format!("Hey {}, {}", nick, m))
+    }
+
+    doit(nick)
+        .unwrap_or_else(|x| {
+            eprintln!("Could not open/read nag-file for {}: {:?}", nick, x);
+            format!("Hey {}", nick)
+        })
+}
+
 struct QuestionHandler;
 
 impl MessageHandler for QuestionHandler {
     fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() > 1 && msg.params[1..].iter().any(|x| x.contains(ctx.nick())) {
             // It would seem, I need some utility functions to retrieve message semantics
-            let m = format!("Hey {}!", msg.get_nick());
-
+            let m = if thread_rng().gen_bool(0.5) {
+                nag_user(&msg.get_nick())
+            } else {
+                format!("Hey {}", &msg.get_nick())
+            };
             let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-
-            ctx.message(&dst, m.as_str());
+            ctx.message(&dst, &m);
         }
 
         // Pretend we're not interested
