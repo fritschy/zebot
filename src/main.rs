@@ -366,8 +366,8 @@ impl MessageHandler for GermanBashHandler {
 
 #[derive(Debug,Clone, Eq, PartialEq)]
 enum UserEvent {
-    Joined,
-    Left,
+    Joined(Duration),
+    Left(Duration),
     NickChangeFrom(String, Duration),
     NickChangeTo(String, Duration),
 }
@@ -380,6 +380,20 @@ impl UserEvent {
             _ => Duration::default(),
         }
     }
+
+    fn to_join(&self) -> Self {
+        match self {
+            UserEvent::Left(d) | UserEvent::NickChangeFrom(_, d) => UserEvent::Joined(*d),
+            _ => UserEvent::Joined(Duration::from_secs(0)),
+        }
+    }
+
+    fn to_left(&self) -> Self {
+        match self {
+            UserEvent::Joined(d) | UserEvent::NickChangeFrom(_, d) => UserEvent::Left(*d),
+            _ => UserEvent::Left(Duration::from_secs(0)),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -390,11 +404,21 @@ struct ChannelUsers {
 impl ChannelUsers {
     fn join(&mut self, user: &str) {
         let now = Instant::now();
-        self.users.insert(user.to_string(), (UserEvent::Joined, now));
+        let e = if let Some(o) = self.users.get(user) {
+            (o.0.to_join(), now)
+        } else {
+            (UserEvent::Joined(Default::default()), now)
+        };
+        self.users.insert(user.to_string(), e);
     }
     fn leave(&mut self, user: &str) {
         let now = Instant::now();
-        if let Some(x) = self.users.insert(user.to_string(), (UserEvent::Left, now)) {
+        let e = if let Some(o) = self.users.get(user) {
+            (o.0.to_left(), now)
+        } else {
+            (UserEvent::Joined(Default::default()), now)
+        };
+        if let Some(x) = self.users.insert(user.to_string(), e) {
             match x.0 {
                 UserEvent::NickChangeFrom(o, _) => { self.leave(&o); }
                 UserEvent::NickChangeTo(o, _) => { self.leave(&o); },
@@ -508,11 +532,11 @@ impl MessageHandler for UserStatus {
                             if let Some(u) = cu.users.get(&qnick) {
                                 let dur = Instant::now().checked_duration_since(u.1).unwrap();
                                 let jp = match &u.0 {
-                                    UserEvent::Joined => {
+                                    UserEvent::Joined(_d) => {
                                         let dur = format_duration(Duration::from_secs(dur.as_secs()));
                                         format!("{}, {} was here for {}", nick, qnick, dur)
                                     },
-                                    UserEvent::Left => {
+                                    UserEvent::Left(_d) => {
                                         let dur = format_duration(Duration::from_secs(dur.as_secs()));
                                         format!("{}, {} was last seen {} ago", nick, qnick, dur)
                                     },
