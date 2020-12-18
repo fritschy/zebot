@@ -17,7 +17,7 @@ use std::io::{BufReader, BufRead};
 use rand::prelude::IteratorRandom;
 use rand::{Rng, thread_rng};
 
-async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
+async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args.value_of("server")
         .unwrap()
         .to_socket_addrs()?
@@ -41,7 +41,7 @@ async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
     let current_channel = args.value_of("channel").unwrap().split(|x| x == ',').next().unwrap();
 
     context.register_handler(CommandCode::PrivMsg, Box::new(FortuneHandler));
-    context.register_handler(CommandCode::PrivMsg, Box::new(QuestionHandler));
+    context.register_handler(CommandCode::PrivMsg, Box::new(ZeBotAnswerHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ErrnoHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(GermanBashHandler));
@@ -57,7 +57,7 @@ async fn async_main(args: clap::ArgMatches<'_>) -> std::io::Result<()> {
             stdout.flush().await?;
             let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
 
-            if bytes == 0 {
+            if bytes == 0 {  // EOF?
                 context.quit();
                 return Ok::<_, std::io::Error>(());
             }
@@ -113,7 +113,18 @@ async fn main() -> std::io::Result<()> {
             .long("channel"))
         .get_matches();
 
-    async_main(m).await
+    loop {
+        if let Err(x) = async_main(&m).await {
+            eprintln!("Encountered an error, will retry...: {:?}", x);
+        } else {
+            eprintln!("Exiting as requested, cya.");
+            break;
+        }
+
+        tokio::time::delay_for(Duration::from_secs(5)).await;
+    }
+
+    Ok(())
 }
 
 fn nag_user(nick: &str) -> String {
@@ -137,13 +148,13 @@ fn nag_user(nick: &str) -> String {
         })
 }
 
-struct QuestionHandler;
+struct ZeBotAnswerHandler;
 
-impl MessageHandler for QuestionHandler {
+impl MessageHandler for ZeBotAnswerHandler {
     fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() > 1 && msg.params[1..].iter().any(|x| x.contains(ctx.nick())) {
             // It would seem, I need some utility functions to retrieve message semantics
-            let m = if thread_rng().gen_bool(0.5) {
+            let m = if thread_rng().gen_bool(0.93) {
                 nag_user(&msg.get_nick())
             } else {
                 format!("Hey {}", &msg.get_nick())
