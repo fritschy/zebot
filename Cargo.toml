@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 nom = { version = "6.0", features = [ "lexical" ] }
-tokio = { version = "*", features = [ "full" ] }
+tokio = { version = "1.0", features = [ "full" ] }
 futures-util = "*"
 clap = "2.33"
 select = "0.5"

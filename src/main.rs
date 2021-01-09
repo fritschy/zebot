@@ -121,7 +121,7 @@ async fn main() -> std::io::Result<()> {
             break;
         }
 
-        tokio::time::delay_for(Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 
     Ok(())

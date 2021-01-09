@@ -184,7 +184,7 @@ impl Context {
 
         for m in self.messages.borrow_mut().drain(..) {
             connection.write_all(m.as_bytes()).await?;
-            tokio::time::delay_for(Duration::from_millis(200)).await;
+            tokio::time::sleep(Duration::from_millis(200)).await;
         }
 
         Ok(())
