@@ -6,20 +6,32 @@ import sys
 import time
 from subprocess import run, PIPE
 
+def output_lines(output):
+    return list(map(lambda x: x.strip(), output.decode().splitlines()))
+
+if len(sys.argv) < 3:
+    print(json.dumps({"error": "not enough arguments to handler"}))
+    sys.exit(1)
+
+# argv: ["./fortune", "src@irc-user|channel", "!fortune -args"]
 args = list(re.split(r'\s+', sys.argv[2]))
-if len(args) > 1:
-    args = args[1:]
-else:
-    args = []
+
+# skip the !command
+args = args[1:] if len(args) > 1 else []
 
 command = ['fortune', *args]
 
-while 1:
+retries = 6
+while retries > 0:
+    retries -= 1
+
     f = run(command, stdout=PIPE, stderr=PIPE)
 
     if f.returncode == 0:
-        output = f.stdout
-        lines = list(map(lambda x: x.strip(), output.decode().splitlines()))
+        lines = output_lines(f.stdout)
+
+        if len(lines) == 0:
+            lines = output_lines(f.stderr)
 
         if len(lines) > 9:
             time.sleep(0.1)
@@ -28,9 +40,12 @@ while 1:
         print(json.dumps({"lines": lines,
                           "box": 1,
                           "command": command}))
-        break
+        sys.exit(0)
     else:
         print(json.dumps({"error": f.stderr.decode(),
                           "code": f.returncode,
                           "command": command}))
-        break
+        sys.exit(1)
+
+print(json.dumps({"error": "Could not get short-enough output"}))
+sys.exit(1)
