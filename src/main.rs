@@ -19,6 +19,7 @@ use rand::{Rng, thread_rng};
 use std::fmt::Display;
 use std::path::Path;
 use stopwatch::Stopwatch;
+use json::JsonValue;
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args.value_of("server")
@@ -179,6 +180,10 @@ fn text_box<T: Display, S: Display>(
     })
 }
 
+fn is_json_flag_set(jv: &JsonValue) -> bool {
+    jv.as_bool().unwrap_or_else(|| false.into()) || jv.as_number().unwrap_or_else(|| 0.into()) != 0
+}
+
 struct Callouthandler;
 
 impl MessageHandler for Callouthandler {
@@ -243,10 +248,7 @@ impl MessageHandler for Callouthandler {
                             if response.contains("error") {
                                 dbg!(&response);
                             } else {
-                                if response["box"].is_null()
-                                    || response["box"].as_bool().unwrap_or(false)
-                                    || response["box"].as_number().unwrap_or(0.into()) == 0
-                                {
+                                if !is_json_flag_set(&response["box"]) {
                                     for l in response["lines"].members() {
                                         ctx.message(&dst, &l.to_string());
                                     }
@@ -255,8 +257,7 @@ impl MessageHandler for Callouthandler {
                                         .members()
                                         .map(|x| x.to_string())
                                         .collect::<Vec<_>>();
-                                    let lines = if response["wrap"].as_number().unwrap_or(0.into())
-                                        == 1
+                                    let lines = if is_json_flag_set(&response["wrap"])
                                         && lines.iter().map(|x| x.len()).any(|l| l > 80)
                                     {
                                         let nlines = lines.len();
