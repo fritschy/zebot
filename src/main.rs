@@ -140,29 +140,67 @@ fn nag_user(nick: &str) -> String {
         })?;
         let br = BufReader::new(f);
         let l = br.lines();
-        let m = l.choose(&mut thread_rng()).unwrap_or_else(|| Ok("...".to_string()))?;
+        let m = l
+            .choose(&mut thread_rng())
+            .unwrap_or_else(|| Ok("...".to_string()))?;
         Ok(format!("Hey {}, {}", nick, m))
     }
 
-    doit(nick)
-        .unwrap_or_else(|x| {
-            eprintln!("Could not open/read nag-file for {}: {:?}", nick, x);
-            format!("Hey {}", nick)
-        })
+    doit(nick).unwrap_or_else(|x| {
+        eprintln!("Could not open/read nag-file for {}: {:?}", nick, x);
+        format!("Hey {}", nick)
+    })
+}
+
+fn text_box<T: Display, S: Display>(
+    mut lines: impl Iterator<Item = T>,
+    header: Option<S>,
+) -> impl Iterator {
+    let mut state = 0;
+    std::iter::from_fn(move || match state {
+        0 => {
+            state += 1;
+            if let Some(ref h) = header {
+                Some(format!(",-------[{}]-------", h))
+            } else {
+                Some(",-------".to_string())
+            }
+        }
+
+        1 => match lines.next() {
+            None => {
+                state += 1;
+                Some("`-------".to_string())
+            }
+            Some(ref next) => Some(format!("| {}", next)),
+        },
+
+        _ => None,
+    })
 }
 
 struct Callouthandler;
 
 impl MessageHandler for Callouthandler {
-    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+    fn handle<'a>(
+        &self,
+        ctx: &Context,
+        msg: &Message<'a>,
+    ) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() < 2 || !msg.params[1].starts_with("!") {
             return Ok(HandlerResult::NotInterested);
         }
 
         let valid_chars = "_+*#'\"-$&%()[]{}\\;:<>>".bytes().collect::<HashSet<_>>();
 
-        let command = msg.params[1][1..].split_ascii_whitespace().next().unwrap_or_else(|| "");
-        if !command.bytes().all(|x| x.is_ascii_alphanumeric() || valid_chars.contains(&x)) {
+        let command = msg.params[1][1..]
+            .split_ascii_whitespace()
+            .next()
+            .unwrap_or_else(|| "");
+        if !command
+            .bytes()
+            .all(|x| x.is_ascii_alphanumeric() || valid_chars.contains(&x))
+        {
             eprintln!("Invalid command {}", command);
             return Ok(HandlerResult::Error("Invalid handler".to_string()));
         }
@@ -205,19 +243,40 @@ impl MessageHandler for Callouthandler {
                             if response.contains("error") {
                                 dbg!(&response);
                             } else {
-                                if response["box"].is_null() ||
-                                    response["box"].as_bool().unwrap_or(false) ||
-                                    response["box"].as_number().unwrap_or(0.into()) == 0 {
+                                if response["box"].is_null()
+                                    || response["box"].as_bool().unwrap_or(false)
+                                    || response["box"].as_number().unwrap_or(0.into()) == 0
+                                {
                                     for l in response["lines"].members() {
                                         ctx.message(&dst, &l.to_string());
                                     }
                                 } else {
-                                    let lines = response["lines"].members().map(|x| x.to_string()).collect::<Vec<_>>();
-                                    let lines = if response.contains("wrap") &&
-                                        lines.iter().map(|x| x.len()).any(|l| l > 80) {
-                                        let s = lines.concat();
-                                        let s = textwrap::fill(&s, 80);
-                                        s.split(|f| f == '\n').map(|x| x.to_string()).collect::<Vec<_>>()
+                                    let lines = response["lines"]
+                                        .members()
+                                        .map(|x| x.to_string())
+                                        .collect::<Vec<_>>();
+                                    let lines = if response["wrap"].as_number().unwrap_or(0.into())
+                                        == 1
+                                        && lines.iter().map(|x| x.len()).any(|l| l > 80)
+                                    {
+                                        let nlines = lines.len();
+
+                                        let s = if lines[nlines - 1].starts_with("    ") {
+                                            let (lines, last) = lines.split_at(nlines - 1);
+
+                                            let s = lines.concat();
+                                            let s = textwrap::fill(&s, 80);
+
+                                            let s = s + "\n";
+                                            s + last[0].as_str()
+                                        } else {
+                                            let s = lines.concat();
+                                            textwrap::fill(&s, 80)
+                                        };
+
+                                        s.split(|f| f == '\n')
+                                            .map(|x| x.to_string())
+                                            .collect::<Vec<_>>()
                                     } else {
                                         lines
                                     };
@@ -235,19 +294,22 @@ impl MessageHandler for Callouthandler {
 
                         Err(e) => {
                             // Perhaps have this as a fallback for non-json handlers? What could possibly go wrong!
-                            eprintln!("Could not parse json from handler {}: {}", command, response);
+                            eprintln!(
+                                "Could not parse json from handler {}: {}",
+                                command, response
+                            );
                             eprintln!("Error: {:?}", e);
                         }
                     }
                 } else {
                     eprintln!("Could not from_utf8 for handler {}", command);
                 }
-            },
+            }
 
             Err(e) => {
                 eprintln!("Could not execute handler: {:?}", e);
                 return Ok(HandlerResult::NotInterested);
-            },
+            }
         }
 
         Ok(HandlerResult::Handled)
