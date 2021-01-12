@@ -27,7 +27,7 @@ with urlopen("https://api.duckduckgo.com/?q={}&format=json&pretty=0".format(term
 topics = response.get("RelatedTopics", [])
 
 if len(topics) > 0:
-    print(json.dumps({"lines": [topics[0]['Text'], "        -- " + topics[0]['FirstURL']], "box": 1}))
+    print(json.dumps({"wrap": 1, "lines": [topics[0]['Text'], "        -- " + topics[0]['FirstURL']], "box": 1}))
 else:
     print(json.dumps({"lines": ["no result from search, try https://duckduckgo.com/?q={}".format(term)],
                       "argv": sys.argv}))

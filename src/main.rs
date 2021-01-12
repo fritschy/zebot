@@ -212,8 +212,19 @@ impl MessageHandler for Callouthandler {
                                         ctx.message(&dst, &l.to_string());
                                     }
                                 } else {
+                                    let lines = response["lines"].members().map(|x| x.to_string()).collect::<Vec<_>>();
+                                    let lines = if response.contains("wrap") &&
+                                        lines.iter().map(|x| x.len()).any(|l| l > 80) {
+                                        let s = lines.concat();
+                                        let s = textwrap::fill(&s, 80);
+                                        s.split(|f| f == '\n').map(|x| x.to_string()).collect::<Vec<_>>()
+                                    } else {
+                                        lines
+                                    };
+
                                     ctx.message(&dst, ",--------");
-                                    for l in response["lines"].members() {
+
+                                    for l in &lines {
                                         let l = format!("| {}", l.to_string());
                                         ctx.message(&dst, &l);
                                     }

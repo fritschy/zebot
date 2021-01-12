@@ -16,6 +16,7 @@ humantime = "2.0"
 rand = "0.8"
 json = "0.12"
 stopwatch = "0.0.7"
+textwrap = "0.13"
 
 [profile.release]
 #debug = true
