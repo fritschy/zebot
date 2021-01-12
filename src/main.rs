@@ -18,6 +18,7 @@ use rand::prelude::IteratorRandom;
 use rand::{Rng, thread_rng};
 use std::fmt::Display;
 use std::path::Path;
+use stopwatch::Stopwatch;
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args.value_of("server")
@@ -179,7 +180,15 @@ impl MessageHandler for Callouthandler {
             //   "box": "0"|"1"|true|false,   # optional
             // }
 
-            match std::process::Command::new(path).args(&args).output() {
+            dbg!(&args);
+
+            let s = Stopwatch::start_new();
+            let cmd_output = std::process::Command::new(path).args(&args).output();
+            let s = s.elapsed();
+
+            eprintln!("Handler {} completed in {:?}", command, s);
+
+            match cmd_output {
                 Ok(p) => {
                     if let Ok(response) = String::from_utf8(p.stdout) {
                         eprintln!("Response: '{}'", &response);
