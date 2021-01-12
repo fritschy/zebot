@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::{Stdout, Write};
+use std::io::{Stdout, Write, Read};
 use std::cell::{RefCell, Cell};
 use std::time::Duration;
 
@@ -142,6 +142,16 @@ impl Context {
         println!("Logging on with {} as {}", self.user.user, self.user.nick);
 
         self.send(msg);
+
+        if let Err(e) = std::fs::File::open("password.txt")
+            .and_then(|mut f| {
+                let mut pw = String::new();
+                f.read_to_string(&mut pw)?;
+                self.message("NickServ", &format!("identify {}", pw.trim()));
+                Ok(())
+            }) {
+            eprintln!("Could not open password.txt: {:?}", e);
+        }
     }
 
     pub fn is_shutdown(&self) -> bool {
