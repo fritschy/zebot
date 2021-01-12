@@ -7,7 +7,7 @@ use select::document::Document;
 use select::predicate::{Attr, Name, Predicate};
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use futures_util::future::FutureExt;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Instant, Duration};
 use std::cell::RefCell;
 
@@ -16,6 +16,8 @@ use std::ops::Add;
 use std::io::{BufReader, BufRead};
 use rand::prelude::IteratorRandom;
 use rand::{Rng, thread_rng};
+use std::fmt::Display;
+use std::path::Path;
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args.value_of("server")
@@ -40,6 +42,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 
     let current_channel = args.value_of("channel").unwrap().split(|x| x == ',').next().unwrap();
 
+    context.register_handler(CommandCode::PrivMsg, Box::new(Callouthandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(FortuneHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ZeBotAnswerHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
@@ -146,6 +149,87 @@ fn nag_user(nick: &str) -> String {
             eprintln!("Could not open/read nag-file for {}: {:?}", nick, x);
             format!("Hey {}", nick)
         })
+}
+
+struct Callouthandler;
+
+impl MessageHandler for Callouthandler {
+    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+        if msg.params.len() < 2 || !msg.params[1].starts_with("!") {
+            return Ok(HandlerResult::NotInterested);
+        }
+
+        let valid_chars = "_+*#'\"-$&%()[]{}\\;:<>>".bytes().collect::<HashSet<_>>();
+
+        let command = msg.params[1][1..].split_ascii_whitespace().next().unwrap_or_else(|| "");
+        if !command.bytes().all(|x| x.is_ascii_alphanumeric() || valid_chars.contains(&x)) {
+            eprintln!("Invalid command {}", command);
+            return Ok(HandlerResult::Error("Invalid handler".to_string()));
+        }
+
+        let path = format!("./handlers/{}", command);
+        let path = Path::new(&path);
+
+        if path.exists() {
+            let args = msg.params.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+
+            // Simplest json from handler
+            // { "lines": [ ... ],
+            //   "dst": "nick" | "channel",   # optional
+            //   "box": "0"|"1"|true|false,   # optional
+            // }
+
+            match std::process::Command::new(path).args(&args).output() {
+                Ok(p) => {
+                    if let Ok(response) = String::from_utf8(p.stdout) {
+                        eprintln!("Response: '{}'", &response);
+                        match json::parse(&response) {
+                            Ok(response) => {
+                                let dst = if response.contains("dst") {
+                                    response["dst"].to_string()
+                                } else {
+                                    msg.get_reponse_destination(&ctx.joined_channels.borrow())
+                                };
+
+                                if response.contains("error") {
+                                    dbg!(&response);
+                                } else {
+                                    if response["box"].is_null() ||
+                                        response["box"].as_bool().unwrap_or(false) ||
+                                        response["box"].as_number().unwrap_or(0.into()) == 0 {
+                                        for l in response["lines"].members() {
+                                            ctx.message(&dst, &l.to_string());
+                                        }
+                                    } else {
+                                        ctx.message(&dst, ",--------");
+                                        for l in response["lines"].members() {
+                                            let l = format!("| {}", l.to_string());
+                                            ctx.message(&dst, &l);
+                                        }
+                                        ctx.message(&dst, "`--------");
+                                    }
+                                }
+                            }
+
+                            Err(e) => {
+                                // Perhaps have this as a fallback for non-json handlers? What could possibly go wrong!
+                                eprintln!("Could not parse json from handler {}: {}", command, response);
+                                eprintln!("Error: {:?}", e);
+                            }
+                        }
+                    } else {
+                        eprintln!("Could not from_utf8 for handler {}", command);
+                    }
+                },
+
+                Err(e) => {
+                    eprintln!("Could not execute handler: {:?}", e);
+                },
+            }
+
+        }
+        Ok(HandlerResult::Handled)
+    }
 }
 
 struct ZeBotAnswerHandler;
