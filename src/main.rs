@@ -44,7 +44,6 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     let current_channel = args.value_of("channel").unwrap().split(|x| x == ',').next().unwrap();
 
     context.register_handler(CommandCode::PrivMsg, Box::new(Callouthandler));
-    context.register_handler(CommandCode::PrivMsg, Box::new(FortuneHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ZeBotAnswerHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ErrnoHandler));
@@ -258,86 +257,6 @@ impl MessageHandler for ZeBotAnswerHandler {
 
         // Pretend we're not interested
         Ok(HandlerResult::NotInterested)
-    }
-}
-
-struct FortuneHandler;
-
-impl MessageHandler for FortuneHandler {
-    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
-        if msg.params.len() < 2 || !msg.params[1].starts_with("!fortune") {
-            return Ok(HandlerResult::NotInterested);
-        }
-
-        let mut args = Vec::new();
-
-        args.extend(msg.params[1]
-            .split_ascii_whitespace()
-            .skip(1)
-            .filter_map(|o| {
-                if (o.starts_with("-") && o.len() > 1 && o[1..].chars().all(|o| o == 's' || o == 'o' || o == 'a')) ||
-                  (!o.starts_with("-") && !o.chars().any(|x| x.is_ascii_control() || x.is_whitespace())) {
-                    Some(o)
-                } else {
-                    None
-                }
-            }));
-
-        eprintln!("Fortune args: {}", args.iter().fold(String::new(), |acc, &x| format!("{}{},", acc, x)));
-
-        let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-
-        loop {
-            match std::process::Command::new("fortune").args(&args).output() {
-                Ok(p) => {
-                    let lines = p.stdout
-                        .as_slice()
-                        .split(|x| *x == b'\n')
-                        .filter(|&x| x.len() > 0)
-                        .map(|x|
-                            x.iter()
-                                .map(|&x| {
-                                    // FIXME: Yeah this won't end well...
-                                    if x.is_ascii_control() || x == b'\t' || x == b'\r' {
-                                        ' '
-                                    } else {
-                                        x as char
-                                    }
-                                }).collect::<String>())
-                        .collect::<Vec<_>>();
-
-                    if lines.len() > 9 {
-                        eprintln!("Requesting new, shorter fortune...");
-                        continue;
-                    }
-
-                    if lines.is_empty() {
-                        ctx.message(&dst, ",--------[ error ]--------");
-                        for l in p.stderr
-                            .as_slice()
-                            .split(|x| *x == b'\n')
-                            .filter(|&x| x.len() > 0) {
-                            let l = format!("| {}", String::from_utf8_lossy(l).as_ref());
-                            ctx.message(&dst, &l);
-                        }
-                    } else {
-                        ctx.message(&dst, ",--------");
-                        for l in lines.iter().map(|x| format!("| {}", x)) {
-                            ctx.message(&dst, l.as_ref());
-                        }
-                    }
-                    ctx.message(&dst, "`--------");
-
-                    break;
-                },
-                Err(e) => {
-                    ctx.message(&dst, e.to_string().as_str());
-                    break;
-                },
-            }
-        }
-
-        Ok(HandlerResult::Handled)
     }
 }
 
