@@ -170,72 +170,75 @@ impl MessageHandler for Callouthandler {
         let path = format!("./handlers/{}", command);
         let path = Path::new(&path);
 
-        if path.exists() {
-            let args = msg.params.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        if !path.exists() {
+            return Ok(HandlerResult::NotInterested);
+        }
 
-            // Simplest json from handler
-            // { "lines": [ ... ],
-            //   "dst": "nick" | "channel",   # optional
-            //   "box": "0"|"1"|true|false,   # optional
-            // }
+        let args = msg.params.iter().map(|x| x.to_string()).collect::<Vec<_>>();
 
-            dbg!(&args);
+        // Simplest json from handler
+        // { "lines": [ ... ],
+        //   "dst": "nick" | "channel",   # optional
+        //   "box": "0"|"1"|true|false,   # optional
+        // }
 
-            let s = Stopwatch::start_new();
-            let cmd_output = std::process::Command::new(path).args(&args).output();
-            let s = s.elapsed();
+        dbg!(&args);
 
-            eprintln!("Handler {} completed in {:?}", command, s);
+        let s = Stopwatch::start_new();
+        let cmd_output = std::process::Command::new(path).args(&args).output();
+        let s = s.elapsed();
 
-            match cmd_output {
-                Ok(p) => {
-                    if let Ok(response) = String::from_utf8(p.stdout) {
-                        eprintln!("Response: '{}'", &response);
-                        match json::parse(&response) {
-                            Ok(response) => {
-                                let dst = if response.contains("dst") {
-                                    response["dst"].to_string()
-                                } else {
-                                    msg.get_reponse_destination(&ctx.joined_channels.borrow())
-                                };
+        eprintln!("Handler {} completed in {:?}", command, s);
 
-                                if response.contains("error") {
-                                    dbg!(&response);
-                                } else {
-                                    if response["box"].is_null() ||
-                                        response["box"].as_bool().unwrap_or(false) ||
-                                        response["box"].as_number().unwrap_or(0.into()) == 0 {
-                                        for l in response["lines"].members() {
-                                            ctx.message(&dst, &l.to_string());
-                                        }
-                                    } else {
-                                        ctx.message(&dst, ",--------");
-                                        for l in response["lines"].members() {
-                                            let l = format!("| {}", l.to_string());
-                                            ctx.message(&dst, &l);
-                                        }
-                                        ctx.message(&dst, "`--------");
+        match cmd_output {
+            Ok(p) => {
+                if let Ok(response) = String::from_utf8(p.stdout) {
+                    dbg!(&response);
+                    match json::parse(&response) {
+                        Ok(response) => {
+                            let dst = if response.contains("dst") {
+                                response["dst"].to_string()
+                            } else {
+                                msg.get_reponse_destination(&ctx.joined_channels.borrow())
+                            };
+
+                            if response.contains("error") {
+                                dbg!(&response);
+                            } else {
+                                if response["box"].is_null() ||
+                                    response["box"].as_bool().unwrap_or(false) ||
+                                    response["box"].as_number().unwrap_or(0.into()) == 0 {
+                                    for l in response["lines"].members() {
+                                        ctx.message(&dst, &l.to_string());
                                     }
+                                } else {
+                                    ctx.message(&dst, ",--------");
+                                    for l in response["lines"].members() {
+                                        let l = format!("| {}", l.to_string());
+                                        ctx.message(&dst, &l);
+                                    }
+                                    ctx.message(&dst, "`--------");
                                 }
                             }
-
-                            Err(e) => {
-                                // Perhaps have this as a fallback for non-json handlers? What could possibly go wrong!
-                                eprintln!("Could not parse json from handler {}: {}", command, response);
-                                eprintln!("Error: {:?}", e);
-                            }
                         }
-                    } else {
-                        eprintln!("Could not from_utf8 for handler {}", command);
+
+                        Err(e) => {
+                            // Perhaps have this as a fallback for non-json handlers? What could possibly go wrong!
+                            eprintln!("Could not parse json from handler {}: {}", command, response);
+                            eprintln!("Error: {:?}", e);
+                        }
                     }
-                },
+                } else {
+                    eprintln!("Could not from_utf8 for handler {}", command);
+                }
+            },
 
-                Err(e) => {
-                    eprintln!("Could not execute handler: {:?}", e);
-                },
-            }
-
+            Err(e) => {
+                eprintln!("Could not execute handler: {:?}", e);
+                return Ok(HandlerResult::NotInterested);
+            },
         }
+
         Ok(HandlerResult::Handled)
     }
 }
