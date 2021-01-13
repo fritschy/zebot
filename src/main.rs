@@ -5,7 +5,7 @@ use std::net::{ ToSocketAddrs, };
 
 use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use futures_util::future::FutureExt;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::{Instant, Duration};
 use std::cell::RefCell;
 
@@ -193,15 +193,13 @@ impl MessageHandler for Callouthandler {
             return Ok(HandlerResult::NotInterested);
         }
 
-        let valid_chars = "_+*#'\"-$&%()[]{}\\;:<>>".bytes().collect::<HashSet<_>>();
-
         let command = msg.params[1][1..]
             .split_ascii_whitespace()
             .next()
             .unwrap_or_else(|| "");
         if !command
-            .bytes()
-            .all(|x| x.is_ascii_alphanumeric() || valid_chars.contains(&x))
+            .chars()
+            .all(|x| x.is_ascii_alphanumeric() || x == '-' || x == '_')
         {
             eprintln!("Invalid command {}", command);
             return Ok(HandlerResult::Error("Invalid handler".to_string()));
