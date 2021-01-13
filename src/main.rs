@@ -275,11 +275,27 @@ impl MessageHandler for Callouthandler {
                                         s.split(|f| f == '\n')
                                             .map(|x| x.to_string())
                                             .collect::<Vec<_>>()
+                                    } else if is_json_flag_set(&response["wrap_single_lines"]) {
+                                        let mut new_lines = Vec::with_capacity(lines.len());
+                                        let opt = textwrap::Options::new(80)
+                                            .splitter(textwrap::NoHyphenation)
+                                            .subsequent_indent("   ");
+                                        for l in lines {
+                                            new_lines.extend(textwrap::wrap(&l, &opt)
+                                                .iter()
+                                                .map(|x| x.to_string()));
+                                        }
+                                        new_lines
                                     } else {
                                         lines
                                     };
 
-                                    ctx.message(&dst, ",--------");
+                                    if response["title"].is_string() {
+                                        let h = format!(",--------[ {} ]", response["title"].to_string());
+                                        ctx.message(&dst, &h);
+                                    } else {
+                                        ctx.message(&dst, ",--------");
+                                    }
 
                                     for l in &lines {
                                         let l = format!("| {}", l.to_string());
