@@ -212,12 +212,20 @@ impl MessageHandler for Callouthandler {
             return Ok(HandlerResult::NotInterested);
         }
 
-        let args = msg.params.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        let nick = msg.get_nick();
+        let mut args = msg.params.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        args.insert(0, nick);  // this sucks
 
-        // Simplest json from handler
+        // Handler args look like this:
+        // $srcnick $src(chan,query) "!command[ ...args]"
+
+        // json from handler
         // { "lines": [ ... ],
         //   "dst": "nick" | "channel",   # optional
         //   "box": "0"|"1"|true|false,   # optional
+        //   "wrap": "0"|"1"              # optional
+        //   "wrap_single_lines": "0"|"1" # optional
+        //   "title": "string"            # optional
         // }
 
         dbg!(&args);
