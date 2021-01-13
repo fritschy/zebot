@@ -5,11 +5,13 @@ import json
 import sys
 import re
 
+errors = []
+
 if len(sys.argv) < 4:
     print(json.dumps({"error": "not enough arguments to handler"}))
     sys.exit(1)
 
-# argv: ["./fortune", "src@irc-user|channel", "!fortune -args"]
+# argv: ["./fortune", "src", "dst", "!fortune -args"]
 args = list(re.split(r'\s+', sys.argv[3]))
 
 # skip the !command
@@ -19,15 +21,38 @@ if len(args) < 1 or len(args[0]) == 0:
     print(json.dumps({"error": "not enough arguments to handler"}))
     sys.exit(1)
 
-term = urlquote(" ".join(args))
+def get_search(t):
+    with urlopen("https://api.duckduckgo.com/?q={}&format=json".format(t)) as r:
+        try:
+            data = r.read().decode()
+            return json.loads(data)
+        except:
+            errors.append({"exc_info": str(sys.exc_info()), "json": data})
+            print(json.dumps({"lines": ["no result from search, try https://duckduckgo.com/?q={}".format(term)],
+                              "argv": sys.argv,
+                              "errors": errors}))
+            sys.exit(0)
 
-with urlopen("https://api.duckduckgo.com/?q={}&format=json&pretty=0".format(term)) as r:
-    response = json.loads(r.read())
+term = urlquote(" ".join(args).lower())
+response = get_search(term)
+
+abstract = response.get("AbstractText", "")
+if abstract != "":
+    abstract = [abstract]
+    abstract_url = response.get("AbstractURL", "")
+    if abstract_url != "":
+        abstract.append("        -- {}".format(abstract_url))
+    print(json.dumps({"lines": abstract, "wrap": 1, "box": 1, "errors": errors}))
+    sys.exit(0)
+
+# no abstract, check related topics
 
 topics = response.get("RelatedTopics", [])
-
 if len(topics) > 0:
-    print(json.dumps({"wrap": 1, "lines": [topics[0]['Text'], "        -- " + topics[0]['FirstURL']], "box": 1}))
+    print(json.dumps({"wrap": 1, "lines": [topics[0]['Text'], "        -- " + topics[0]['FirstURL']],
+                      "box": 1,
+                      "errors": errors}))
 else:
     print(json.dumps({"lines": ["no result from search, try https://duckduckgo.com/?q={}".format(term)],
-                      "argv": sys.argv}))
+                      "argv": sys.argv,
+                      "errors": errors}))
