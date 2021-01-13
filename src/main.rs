@@ -231,13 +231,21 @@ impl MessageHandler for Callouthandler {
         dbg!(&args);
 
         let s = Stopwatch::start_new();
-        let cmd_output = std::process::Command::new(path).args(&args).output();
+        let cmd = std::process::Command::new(path).args(&args).output();
         let s = s.elapsed();
 
         eprintln!("Handler {} completed in {:?}", command, s);
 
-        match cmd_output {
+        match cmd {
             Ok(p) => {
+                if !p.status.success() {
+                    let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                    eprintln!("Handler failed with code {}", p.status.code().unwrap());
+                    dbg!(&p);
+                    ctx.message(&dst, "Somehow, that did not work...");
+                    return Ok(HandlerResult::Handled);
+                }
+
                 if let Ok(response) = String::from_utf8(p.stdout) {
                     dbg!(&response);
                     match json::parse(&response) {
