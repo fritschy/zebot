@@ -2,16 +2,7 @@
 
 from urllib.request import urlopen, quote as urlquote
 import json
-import sys
-import re
 from bs4 import BeautifulSoup
-
-if len(sys.argv) < 3:
-    print(json.dumps({"error": "not enough arguments to handler"}))
-    sys.exit(1)
-
-# argv: ["./fortune", "src@irc-user|channel", "!fortune -args"]
-args = list(re.split(r'\s+', sys.argv[2]))
 
 def has_attr(attr, value):
     return lambda tag: tag.has_attr(attr) and tag.get_attr(attr) == value

@@ -2,4 +2,4 @@
 
 echo '{"lines": ['
 cd handlers/ && ls -Q | tr '\n' ',' | sed -e 's/,$//'
-echo '], "box": 1}'
+echo '], "box": 1, "title": "available commands"}'
