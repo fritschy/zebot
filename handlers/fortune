@@ -4,6 +4,7 @@ import json
 import re
 import sys
 import time
+import os.path
 from subprocess import run, PIPE
 
 from handler_lib import *
@@ -11,12 +12,20 @@ from handler_lib import *
 def output_lines(output):
     return list(map(lambda x: x.strip(), output.decode().splitlines()))
 
-command = ['fortune', *get_split_args()]
+command = ['fortune', '-c', *get_split_args()]
 f = run(command, stdout=PIPE, stderr=PIPE)
 if f.returncode == 0:
     lines = output_lines(f.stdout)
     if len(lines) == 0:
         lines = output_lines(f.stderr)
+        handler_exit(1, title="stderr", lines=lines, command=command)
+    else:
+        title = lines[0].strip('()')
+        lines = lines[2:]
+        tp = title.split('/')
+        if len(tp) >= 2:
+            title = "/".join(tp[-2:])
+        handler_exit(0, title=title, lines=lines, box=1, command=command)
     handler_exit(0, lines=lines, box=1, command=command)
 else:
     handler_exit(1, error=f.stderr.decode(), code=f.returncode, command=command)
