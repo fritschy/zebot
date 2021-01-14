@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 
-from urllib.request import urlopen, quote as urlquote
-import json
 from bs4 import BeautifulSoup
+from urllib.request import urlopen
 
-def has_attr(attr, value):
-    return lambda tag: tag.has_attr(attr) and tag.get_attr(attr) == value
+from handler_lib import *
 
-while 1:  # in case we need to request another one
-    try:
-        with urlopen("http://german-bash.org/action/random") as r:
-            bs = BeautifulSoup(r.read(), features="lxml")
-        qb = bs.find(attrs = {"class": "quotebox"})
-        id = next((x.attrs['name'] for x in qb.children if x.name))
-        quote = bs.find('div', {'class': 'zitat'})
-        lines = list((c for c in map(str.strip, quote.strings) if c != ''))
-        if len(lines) > 9:
-            continue
-        print(json.dumps({"lines": lines, "box": 1, "title": id, "wrap_single_lines": 1}))
-        break
-    except:
-        print(json.dumps({"lines": ["Uhm, did not recognize the HTML ..."], "box": 0}))
-        break
+lines = []
+qid = ""
+
+try:
+    with urlopen("http://german-bash.org/action/random") as r:
+        bs = BeautifulSoup(r.read(), features="lxml")
+    qb = bs.find(attrs={"class": "quotebox"})
+    qid = next((x.attrs['name'] for x in qb.children if x.name))
+    quote = bs.find('div', {'class': 'zitat'})
+    lines = list(filter(lambda x: x!='', map(str.strip, quote.strings)))
+except:
+    log({"exc_info": sys.exc_info()})
+    handler_exit(0, lines=["Uhm, did not recognize the HTML ..."], box=0)
+
+handler_exit(0, lines=lines, box=1, title=qid, wrap_single_lines=1)

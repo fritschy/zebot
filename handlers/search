@@ -3,27 +3,9 @@
 from urllib.request import urlopen, quote as urlquote
 import json
 import sys
-import re
 
-errors = []
+from handler_lib import handler_exit, log, get_args
 
-def exit(status, **kwargs):
-    if kwargs.get("errors") is None and len(errors) != 0:
-        kwargs["errors"] = errors
-    print(json.dumps(kwargs))
-    sys.exit(status)
-
-if len(sys.argv) < 4:
-    exit(1, error="not enough arguments to handler")
-
-# argv: ["./fortune", "src", "dst", "!fortune -args"]
-args = list(re.split(r'\s+', sys.argv[3]))
-
-# skip the !command
-args = args[1:] if len(args) > 1 else []
-
-if len(args) < 1 or len(args[0]) == 0:
-    exit(1, error="not enough arguments to handler")
 
 def get_search(t):
     with urlopen("https://api.duckduckgo.com/?q={}&format=json".format(urlquote(t))) as r:
@@ -31,24 +13,24 @@ def get_search(t):
             data = r.read().decode()
             return json.loads(data)
         except:
-            errors.append({"exc_info": str(sys.exc_info()), "json": data})
-            exit(0, lines=["no result from search, try https://duckduckgo.com/?q={}".format(urlquote(t))], argv=sys.argv)
+            log({"exc_info": str(sys.exc_info()), "json": data})
 
-term = " ".join(args).lower()
+
+term = get_args().lower()
 response = get_search(term)
 
-abstract = response.get("AbstractText", "")
-if abstract != "":
-    abstract = [abstract]
-    abstract_url = response.get("AbstractURL", "")
-    if abstract_url != "":
-        abstract.append("        -- {}".format(abstract_url))
-    exit(0, lines=abstract, wrap=1, box=1)
+if response:
+    abstract = response.get("AbstractText")
+    if abstract:
+        abstract = [abstract]
+        abstract_url = response.get("AbstractURL")
+        if abstract_url:
+            abstract.append("        -- {}".format(abstract_url))
+        handler_exit(0, lines=abstract, wrap=1, box=1, title="abstract")
 
-# no abstract, check related topics
+    # no abstract, check related topics
+    topics = response.get("RelatedTopics", [])
+    if len(topics) != 0:
+        handler_exit(0, wrap=1, title="related", lines=[topics[0]['Text'], "        -- " + topics[0]['FirstURL']], box=1)
 
-topics = response.get("RelatedTopics", [])
-if len(topics) > 0:
-    exit(0, wrap=1, lines=[topics[0]['Text'], "        -- " + topics[0]['FirstURL']], box=1)
-else:
-    exit(0, lines=["no result from search, try https://duckduckgo.com/?q={}".format(urlquote(term))], argv=sys.argv)
+handler_exit(0, lines=["no result from search, try https://duckduckgo.com/?q={}".format(urlquote(term))], argv=sys.argv)
