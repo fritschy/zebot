@@ -258,6 +258,8 @@ impl MessageHandler for Callouthandler {
 
                             if response.contains("error") {
                                 dbg!(&response);
+                                ctx.message(&dst, "Somehow, that did not work...");
+                                return Ok(HandlerResult::Handled);
                             } else {
                                 if !is_json_flag_set(&response["box"]) {
                                     for l in response["lines"].members() {
