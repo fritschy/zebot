@@ -192,9 +192,18 @@ impl Context {
 
         let mut connection = self.connection.borrow_mut();
 
-        for m in self.messages.borrow_mut().drain(..) {
+        fn more_time(count: usize) -> u64 {
+            if count > 8 {
+                (count as u64 - 9) * 50
+            } else {
+                0
+            }
+        }
+
+        for (count, m) in self.messages.borrow_mut().drain(..).enumerate() {
             connection.write_all(m.as_bytes()).await?;
-            tokio::time::sleep(Duration::from_millis(400)).await;
+            // This does not take into account messages sent with the previous commits...
+            tokio::time::sleep(Duration::from_millis(400 + more_time(count))).await;
         }
 
         Ok(())
