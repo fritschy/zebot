@@ -1,26 +1,27 @@
 mod irc;
 use irc::*;
 
-use std::net::{ ToSocketAddrs, };
+use std::net::ToSocketAddrs;
 
-use tokio::io::{AsyncWriteExt, AsyncReadExt};
 use futures_util::future::FutureExt;
-use std::collections::HashMap;
-use std::time::{Instant, Duration};
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use humantime::format_duration;
-use std::ops::Add;
-use std::io::{BufReader, BufRead};
+use json::JsonValue;
 use rand::prelude::IteratorRandom;
-use rand::{Rng, thread_rng};
+use rand::{thread_rng, Rng};
 use std::fmt::Display;
+use std::io::{BufRead, BufReader};
+use std::ops::Add;
 use std::path::Path;
 use stopwatch::Stopwatch;
-use json::JsonValue;
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
-    let addr = args.value_of("server")
+    let addr = args
+        .value_of("server")
         .unwrap()
         .to_socket_addrs()?
         .next()
@@ -40,7 +41,12 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
         context.join(i);
     }
 
-    let current_channel = args.value_of("channel").unwrap().split(|x| x == ',').next().unwrap();
+    let current_channel = args
+        .value_of("channel")
+        .unwrap()
+        .split(|x| x == ',')
+        .next()
+        .unwrap();
 
     context.register_handler(CommandCode::PrivMsg, Box::new(Callouthandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ZeBotAnswerHandler));
@@ -58,7 +64,8 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
             stdout.flush().await?;
             let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
 
-            if bytes == 0 {  // EOF?
+            if bytes == 0 {
+                // EOF?
                 context.quit();
                 return Ok::<_, std::io::Error>(());
             }
@@ -71,7 +78,8 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
             context.message(current_channel, x);
 
             Ok(())
-        }.fuse();
+        }
+        .fuse();
 
         let a = context.update().fuse();
 
@@ -93,25 +101,31 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 async fn main() -> std::io::Result<()> {
     let m = clap::App::new("zebot")
         .about("An IRC Bot")
-        .arg(clap::Arg::with_name("server")
-            .default_value("localhost:6667")
-            .short("s")
-            .long("server"))
-        .arg(clap::Arg::with_name("nick")
-            .default_value("ZeBot")
-            .short("n")
-            .long("nick"))
-        .arg(clap::Arg::with_name("user")
-            .default_value("The Bot")
-            .short("u")
-            .long("user"))
-        .arg(clap::Arg::with_name("pass")
-            .short("p")
-            .long("pass"))
-        .arg(clap::Arg::with_name("channel")
-            .default_value("#zebot-test")
-            .short("c")
-            .long("channel"))
+        .arg(
+            clap::Arg::with_name("server")
+                .default_value("localhost:6667")
+                .short("s")
+                .long("server"),
+        )
+        .arg(
+            clap::Arg::with_name("nick")
+                .default_value("ZeBot")
+                .short("n")
+                .long("nick"),
+        )
+        .arg(
+            clap::Arg::with_name("user")
+                .default_value("The Bot")
+                .short("u")
+                .long("user"),
+        )
+        .arg(clap::Arg::with_name("pass").short("p").long("pass"))
+        .arg(
+            clap::Arg::with_name("channel")
+                .default_value("#zebot-test")
+                .short("c")
+                .long("channel"),
+        )
         .get_matches();
 
     loop {
@@ -130,7 +144,7 @@ async fn main() -> std::io::Result<()> {
 
 fn nag_user(nick: &str) -> String {
     fn doit(nick: &str) -> Result<String, std::io::Error> {
-        let nick = nick.replace(|x:char| !x.is_alphanumeric(), "_");
+        let nick = nick.replace(|x: char| !x.is_alphanumeric(), "_");
         let nag_file = format!("nag-{}.txt", nick);
         let f = std::fs::File::open(&nag_file).map_err(|e| {
             eprintln!("Could not open nag-file '{}'", &nag_file);
@@ -214,7 +228,7 @@ impl MessageHandler for Callouthandler {
 
         let nick = msg.get_nick();
         let mut args = msg.params.iter().map(|x| x.to_string()).collect::<Vec<_>>();
-        args.insert(0, nick);  // this sucks
+        args.insert(0, nick); // this sucks
 
         // Handler args look like this:
         // $srcnick $src(chan,query) "!command[ ...args]"
@@ -295,11 +309,13 @@ impl MessageHandler for Callouthandler {
                                         let mut new_lines = Vec::with_capacity(lines.len());
                                         let opt = textwrap::Options::new(80)
                                             .splitter(textwrap::NoHyphenation)
-                                            .subsequent_indent("   ");
+                                            .subsequent_indent("  ");
                                         for l in lines {
-                                            new_lines.extend(textwrap::wrap(&l, &opt)
-                                                .iter()
-                                                .map(|x| x.to_string()));
+                                            new_lines.extend(
+                                                textwrap::wrap(&l, &opt)
+                                                    .iter()
+                                                    .map(|x| x.to_string()),
+                                            );
                                         }
                                         new_lines
                                     } else {
@@ -307,7 +323,10 @@ impl MessageHandler for Callouthandler {
                                     };
 
                                     if response["title"].is_string() {
-                                        let h = format!(",--------[ {} ]", response["title"].to_string());
+                                        let h = format!(
+                                            ",--------[ {} ]",
+                                            response["title"].to_string()
+                                        );
                                         ctx.message(&dst, &h);
                                     } else {
                                         ctx.message(&dst, ",--------");
@@ -349,7 +368,11 @@ impl MessageHandler for Callouthandler {
 struct ZeBotAnswerHandler;
 
 impl MessageHandler for ZeBotAnswerHandler {
-    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+    fn handle<'a>(
+        &self,
+        ctx: &Context,
+        msg: &Message<'a>,
+    ) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() > 1 && msg.params[1..].iter().any(|x| x.contains(ctx.nick())) {
             // It would seem, I need some utility functions to retrieve message semantics
             let m = if thread_rng().gen_bool(0.93) {
@@ -369,12 +392,21 @@ impl MessageHandler for ZeBotAnswerHandler {
 struct MiscCommandsHandler;
 
 impl MessageHandler for MiscCommandsHandler {
-    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+    fn handle<'a>(
+        &self,
+        ctx: &Context,
+        msg: &Message<'a>,
+    ) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() < 2 {
             return Ok(HandlerResult::NotInterested);
         }
 
-        match msg.params[1].as_ref().split(" ").next().unwrap_or(msg.params[1].as_ref()) {
+        match msg.params[1]
+            .as_ref()
+            .split(" ")
+            .next()
+            .unwrap_or(msg.params[1].as_ref())
+        {
             "!help" | "!commands" => {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
                 ctx.message(&dst, "I am ZeBot, I can say Hello and answer to !fortune, !bash, !echo and !errno <int>");
@@ -391,7 +423,11 @@ impl MessageHandler for MiscCommandsHandler {
             }
             "!exec" | "!sh" | "!shell" | "!powershell" | "!power-shell" => {
                 let m = format!("Na aber wer wird denn gleich, {}", msg.get_nick());
-                ctx.message(msg.get_reponse_destination(&ctx.joined_channels.borrow()).as_str(), &m);
+                ctx.message(
+                    msg.get_reponse_destination(&ctx.joined_channels.borrow())
+                        .as_str(),
+                    &m,
+                );
             }
             _ => return Ok(HandlerResult::NotInterested),
         }
@@ -403,7 +439,11 @@ impl MessageHandler for MiscCommandsHandler {
 struct ErrnoHandler;
 
 impl MessageHandler for ErrnoHandler {
-    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+    fn handle<'a>(
+        &self,
+        ctx: &Context,
+        msg: &Message<'a>,
+    ) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() < 2 || !msg.params[1].as_ref().starts_with("!errno ") {
             return Ok(HandlerResult::NotInterested);
         }
@@ -427,7 +467,7 @@ impl MessageHandler for ErrnoHandler {
     }
 }
 
-#[derive(Debug,Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 enum UserEvent {
     Joined(Duration),
     Left(Duration),
@@ -483,8 +523,12 @@ impl ChannelUsers {
         };
         if let Some(x) = self.users.insert(user.to_string(), e) {
             match x.0 {
-                UserEvent::NickChangeFrom(o, _) => { self.leave(&o); }
-                UserEvent::NickChangeTo(o, _) => { self.leave(&o); },
+                UserEvent::NickChangeFrom(o, _) => {
+                    self.leave(&o);
+                }
+                UserEvent::NickChangeTo(o, _) => {
+                    self.leave(&o);
+                }
                 _ => (),
             }
         }
@@ -502,7 +546,7 @@ impl ChannelUsers {
 impl Default for ChannelUsers {
     fn default() -> Self {
         ChannelUsers {
-            users: HashMap::new()
+            users: HashMap::new(),
         }
     }
 }
@@ -521,7 +565,11 @@ impl UserStatus {
 }
 
 impl MessageHandler for UserStatus {
-    fn handle<'a>(&self, ctx: &Context, msg: &Message<'a>) -> Result<HandlerResult, std::io::Error> {
+    fn handle<'a>(
+        &self,
+        ctx: &Context,
+        msg: &Message<'a>,
+    ) -> Result<HandlerResult, std::io::Error> {
         match msg.command {
             CommandCode::Numeric(353) => {
                 let mut c = self.channels.borrow_mut();
@@ -529,7 +577,11 @@ impl MessageHandler for UserStatus {
                 let x = c
                     .entry(msg.params[2].to_string())
                     .or_insert(ChannelUsers::default());
-                for n in msg.params[3].to_string().split(|x| x == ' ').map(|x| x.trim_start_matches("@")) {
+                for n in msg.params[3]
+                    .to_string()
+                    .split(|x| x == ' ')
+                    .map(|x| x.trim_start_matches("@"))
+                {
                     x.join(&n.to_string());
                     eprintln!("> User {} joined on ZeBot join!", n);
                 }
@@ -539,12 +591,10 @@ impl MessageHandler for UserStatus {
                 let nick = msg.get_nick();
                 let channel = msg.params[0].to_string();
                 let mut c = self.channels.borrow_mut();
-                let x = c
-                    .entry(channel)
-                    .or_insert(ChannelUsers::default());
+                let x = c.entry(channel).or_insert(ChannelUsers::default());
                 x.leave(&nick);
                 eprintln!("> User {} left", &nick);
-            },
+            }
 
             CommandCode::Quit => {
                 let nick = msg.get_nick();
@@ -552,7 +602,7 @@ impl MessageHandler for UserStatus {
                     c.1.leave(&nick);
                 }
                 eprintln!("> User {} quit", &nick);
-            },
+            }
 
             CommandCode::Nick => {
                 let nick = msg.get_nick();
@@ -564,23 +614,27 @@ impl MessageHandler for UserStatus {
                         // Add old duration too ...
                         let since = now.duration_since(u.1).add(u.0.duration());
                         let since = Duration::from_secs(since.as_secs());
-                        x.users.insert(new_nick.clone(), (UserEvent::NickChangeFrom(nick.clone(), since), now));
-                        x.users.insert(nick.clone(), (UserEvent::NickChangeTo(new_nick.clone(), since), now));
+                        x.users.insert(
+                            new_nick.clone(),
+                            (UserEvent::NickChangeFrom(nick.clone(), since), now),
+                        );
+                        x.users.insert(
+                            nick.clone(),
+                            (UserEvent::NickChangeTo(new_nick.clone(), since), now),
+                        );
                     };
                 }
                 eprintln!("> User {} changed nick to {}", &nick, &new_nick);
-            },
+            }
 
             CommandCode::Join => {
                 let nick = msg.get_nick();
                 let channel = msg.params[0].to_string();
                 let mut c = self.channels.borrow_mut();
-                let x = c
-                    .entry(channel)
-                    .or_insert(ChannelUsers::default());
+                let x = c.entry(channel).or_insert(ChannelUsers::default());
                 x.join(&nick);
                 eprintln!("> User {} joined", &nick);
-            },
+            }
 
             CommandCode::PrivMsg => {
                 let nick = msg.get_nick();
@@ -622,7 +676,7 @@ impl MessageHandler for UserStatus {
                         });
                     }
                 }
-            },
+            }
             _ => (),
         }
         Ok(HandlerResult::NotInterested)

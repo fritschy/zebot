@@ -1,6 +1,6 @@
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::io::{Stdout, Write, Read};
-use std::cell::{RefCell, Cell};
+use std::io::{Read, Stdout, Write};
 use std::time::Duration;
 
 mod message;
@@ -14,8 +14,8 @@ pub(crate) use command::*;
 
 mod handler;
 pub use handler::*;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use std::net::SocketAddr;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 pub struct User {
@@ -29,7 +29,7 @@ impl User {
         User {
             nick: nick.to_string(),
             user: user.to_string(),
-            pass: pass.map(|x| x.to_string())
+            pass: pass.map(|x| x.to_string()),
         }
     }
 }
@@ -43,7 +43,7 @@ impl ReaderBuf {
     fn new() -> Self {
         ReaderBuf {
             buf: RefCell::new(vec![0; 4096]),
-            last: RefCell::new(Vec::new())
+            last: RefCell::new(Vec::new()),
         }
     }
 
@@ -68,7 +68,10 @@ impl ReaderBuf {
             .await?;
 
         if bytes == 0 {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "Read of length 0 fro server"))
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Read of length 0 fro server",
+            ))
         } else {
             Ok(off + bytes)
         }
@@ -135,21 +138,19 @@ impl Context {
     pub fn logon(&self) {
         let msg = format!(
             "USER {} none none :The Bot\r\nNICK :{}\r\n",
-            self.user.nick,
-            self.user.nick,
+            self.user.nick, self.user.nick,
         );
 
         println!("Logging on with {} as {}", self.user.user, self.user.nick);
 
         self.send(msg);
 
-        if let Err(e) = std::fs::File::open("password.txt")
-            .and_then(|mut f| {
-                let mut pw = String::new();
-                f.read_to_string(&mut pw)?;
-                self.message("NickServ", &format!("identify {}", pw.trim()));
-                Ok(())
-            }) {
+        if let Err(e) = std::fs::File::open("password.txt").and_then(|mut f| {
+            let mut pw = String::new();
+            f.read_to_string(&mut pw)?;
+            self.message("NickServ", &format!("identify {}", pw.trim()));
+            Ok(())
+        }) {
             eprintln!("Could not open password.txt: {:?}", e);
         }
     }
@@ -212,16 +213,23 @@ impl Context {
     pub async fn update(&self) -> Result<(), std::io::Error> {
         // Join channels we want to join...
         if !self.channels.borrow().is_empty() {
-            let joins = self.channels.borrow().iter().fold(String::new(), |acc, x| {
-                format!("{}JOIN :{}\r\n", acc, x)
-            });
-            self.joined_channels.borrow_mut().append(&mut self.channels.borrow_mut());
+            let joins = self
+                .channels
+                .borrow()
+                .iter()
+                .fold(String::new(), |acc, x| format!("{}JOIN :{}\r\n", acc, x));
+            self.joined_channels
+                .borrow_mut()
+                .append(&mut self.channels.borrow_mut());
             self.send(joins);
         }
 
         self.send_pending_messages().await?;
 
-        let bytes = self.bufs.read_from(&mut self.connection.borrow_mut()).await?;
+        let bytes = self
+            .bufs
+            .read_from(&mut self.connection.borrow_mut())
+            .await?;
 
         let mut i = &self.bufs.buf.borrow()[..bytes];
         loop {
@@ -229,18 +237,24 @@ impl Context {
                 Ok((r, msg)) => {
                     i = r;
 
-                    for h in self.allmsg_handlers.iter() { h.handle(self, &msg)?; }
+                    for h in self.allmsg_handlers.iter() {
+                        h.handle(self, &msg)?;
+                    }
 
-                    self.handlers.get(&msg.command).map(|x| -> Result<(), std::io::Error> {
-                        for h in x.iter() {
-                            match h.handle(self, &msg)? {
-                                HandlerResult::Error(x) => eprintln!("Message handler errored: {}", x),
-                                HandlerResult::Handled => break,  // Really?
-                                _ => (),
+                    self.handlers
+                        .get(&msg.command)
+                        .map(|x| -> Result<(), std::io::Error> {
+                            for h in x.iter() {
+                                match h.handle(self, &msg)? {
+                                    HandlerResult::Error(x) => {
+                                        eprintln!("Message handler errored: {}", x)
+                                    }
+                                    HandlerResult::Handled => break, // Really?
+                                    _ => (),
+                                }
                             }
-                        }
-                        Ok(())
-                    });
+                            Ok(())
+                        });
                 }
 
                 Err(_) => {
