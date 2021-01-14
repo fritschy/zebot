@@ -194,7 +194,7 @@ impl Context {
 
         fn more_time(count: usize) -> u64 {
             if count > 8 {
-                (count as u64 - 9) * 50
+                (count as u64 - 9) * 100
             } else {
                 0
             }
