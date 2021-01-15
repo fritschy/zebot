@@ -162,13 +162,13 @@ fn nag_user(nick: &str) -> String {
 fn text_box<T: Display, S: Display>(
     mut lines: impl Iterator<Item = T>,
     header: Option<S>,
-) -> impl Iterator {
+) -> impl Iterator<Item = String> {
     let mut state = 0;
     std::iter::from_fn(move || match state {
         0 => {
             state += 1;
             if let Some(ref h) = header {
-                Some(format!(",-------[{}]-------", h))
+                Some(format!(",-------[ {} ]", h))
             } else {
                 Some(",-------".to_string())
             }
@@ -317,21 +317,9 @@ impl MessageHandler for Callouthandler {
                                         lines
                                     };
 
-                                    if response["title"].is_string() {
-                                        let h = format!(
-                                            ",--------[ {} ]",
-                                            response["title"].to_string()
-                                        );
-                                        ctx.message(&dst, &h);
-                                    } else {
-                                        ctx.message(&dst, ",--------");
+                                    for i in text_box(lines.iter(), response["title"].as_str()) {
+                                        ctx.message(&dst, &i);
                                     }
-
-                                    for l in &lines {
-                                        let l = format!("| {}", l.to_string());
-                                        ctx.message(&dst, &l);
-                                    }
-                                    ctx.message(&dst, "`--------");
                                 }
                             }
                         }
