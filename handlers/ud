@@ -9,13 +9,15 @@ url = "https://www.urbandictionary.com/define.php?term={}".format(args)
 with urlopen(url) as r:
     bs=BS(r.read(), features="lxml")
 
-title = bs.find("div", attrs={"class": "def-header"}).text
+title = bs.find("div", attrs={"class": "def-header"}).text.strip()
 
 lines = []
+numbered = False
 for line in bs.find("div", attrs={"class": "meaning"}).stripped_strings:
     # some definitions have numbered variants in one #meaning
     if re.match(r'^\d\.', line):
         lines.append(line)
+        numbered = True
     else:
         if len(lines) == 0:
             lines.append(line)
@@ -25,4 +27,7 @@ for line in bs.find("div", attrs={"class": "meaning"}).stripped_strings:
 # append source
 lines.append("        -- {}".format(url))
 
-handler_exit(0, lines=lines, title=title, box=1, wrap_single_lines=1)
+if numbered:
+    handler_exit(0, lines=lines, title=title, box=1, wrap_single_lines=1)
+else:
+    handler_exit(0, lines=lines, title=title, box=1, wrap=1)
