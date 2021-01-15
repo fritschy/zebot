@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::io::{Read, Stdout, Write};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 mod message;
 pub(crate) use message::*;
@@ -88,6 +88,7 @@ pub struct Context {
     bufs: ReaderBuf,
     messages: RefCell<Vec<String>>,
     shutdown: Cell<bool>,
+    last_flush: Cell<Instant>,
 }
 
 impl Context {
@@ -113,6 +114,7 @@ impl Context {
             connection,
             handlers,
             user,
+            last_flush: Cell::new(Instant::now()),
         })
     }
 
@@ -201,11 +203,19 @@ impl Context {
             }
         }
 
+        let offset = if (Instant::now() - self.last_flush.get()).as_millis() < 2000 {
+            400
+        } else {
+            0
+        };
+
         for (count, m) in self.messages.borrow_mut().drain(..).enumerate() {
             connection.write_all(m.as_bytes()).await?;
             // This does not take into account messages sent with the previous commits...
-            tokio::time::sleep(Duration::from_millis(400 + more_time(count))).await;
+            tokio::time::sleep(Duration::from_millis(400 + offset + more_time(count))).await;
         }
+
+        self.last_flush.set(Instant::now());
 
         Ok(())
     }
