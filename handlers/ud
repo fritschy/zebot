@@ -7,9 +7,22 @@ from bs4 import BeautifulSoup as BS
 args = urlquote(get_args())
 url = "https://www.urbandictionary.com/define.php?term={}".format(args)
 with urlopen(url) as r:
-    bs=BS(r.read())
+    bs=BS(r.read(), features="lxml")
 
 title = bs.find("div", attrs={"class": "def-header"}).text
-lines = [bs.find("div", attrs={"class": "meaning"}).text, "        -- {}".format(url)]
+
+lines = []
+for line in bs.find("div", attrs={"class": "meaning"}).stripped_strings:
+    # some definitions have numbered variants in one #meaning
+    if re.match(r'^\d\.', line):
+        lines.append(line)
+    else:
+        if len(lines) == 0:
+            lines.append(line)
+        else:
+            lines[-1] += " " + line
+
+# append source
+lines.append("        -- {}".format(url))
 
 handler_exit(0, lines=lines, title=title, box=1, wrap_single_lines=1)
