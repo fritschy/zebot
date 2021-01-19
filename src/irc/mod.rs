@@ -130,10 +130,13 @@ impl Context {
     pub fn leave(&self, chan: &str) {
         if let Some(c) = self.channels.borrow().iter().position(|x| x == chan) {
             self.channels.borrow_mut().remove(c);
-        } else if let Some(c) = self.joined_channels.borrow().iter().position(|x| x == chan) {
-            self.joined_channels.borrow_mut().remove(c);
-            let cmd = format!("PART {}\r\n", chan);
-            self.send(cmd);
+        } else {
+            let p = self.joined_channels.borrow().iter().position(|x| x == chan);
+            if let Some(c) = p {
+                self.joined_channels.borrow_mut().remove(c);
+                let cmd = format!("PART {}\r\n", chan);
+                self.send(cmd);
+            }
         }
     }
 
