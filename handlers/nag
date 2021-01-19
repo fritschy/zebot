@@ -15,4 +15,4 @@ try:
         lines = list(map(str.strip, f.readlines()))
         handler_exit(0, lines=["Hey {}, {}".format(dst[0], random.choice(lines))])
 except:
-    handler_exit(0, lines=["Hey {}"])
+    pass #handler_exit(0, lines=["Hey {}"])
