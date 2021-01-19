@@ -70,7 +70,43 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
             let x = String::from_utf8_lossy(bytes);
             let x = x.trim_end();
 
-            context.message(current_channel, x);
+            if x.starts_with("/") {
+                let mut cmd_and_args = x[1..].split_whitespace();
+                let cmd = cmd_and_args.next().unwrap();
+                let args = cmd_and_args.collect::<Vec<_>>();
+
+                match cmd.to_lowercase().as_str() {
+                    "msg" => {
+                        if args.len() < 1 {
+                            eprintln!("Error: /MSG Destination Message");
+                        } else {
+                            context.message(args[0], &args[1..].join(" "));
+                        }
+                    }
+
+                    "join" => {
+                        if args.len() != 1 {
+                            eprintln!("Error: /JOIN CHANNEL");
+                        } else {
+                            context.join(args[0]);
+                        }
+                    }
+
+                    "part" => {
+                        if args.len() != 1 {
+                            eprintln!("Error: /PART CHANNEL");
+                        } else {
+                            context.leave(args[0]);
+                        }
+                    }
+
+                    x => {
+                        eprintln!("Unknown command /{}", x);
+                    }
+                }
+            } else {
+                context.message(current_channel, x);
+            }
 
             Ok(())
         }
