@@ -250,6 +250,8 @@ impl MessageHandler for Callouthandler {
             return Ok(HandlerResult::Error("Invalid handler".to_string()));
         }
 
+        let command = command.to_lowercase();
+
         let path = format!("./handlers/{}", command);
         let path = Path::new(&path);
 
