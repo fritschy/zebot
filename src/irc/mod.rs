@@ -244,6 +244,11 @@ impl Context {
             .read_from(&mut self.connection.borrow_mut())
             .await?;
 
+        if bytes == 0 {
+            self.shutdown.set(true);
+            return Ok(());
+        }
+
         let mut i = &self.bufs.buf.borrow()[..bytes];
         loop {
             match message(i) {
