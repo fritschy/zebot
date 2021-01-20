@@ -47,7 +47,6 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     context.register_handler(CommandCode::PrivMsg, Box::new(Callouthandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ZeBotAnswerHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
-    context.register_handler(CommandCode::PrivMsg, Box::new(ErrnoHandler));
 
     context.logon();
 
@@ -451,37 +450,6 @@ impl MessageHandler for MiscCommandsHandler {
                 );
             }
             _ => return Ok(HandlerResult::NotInterested),
-        }
-
-        Ok(HandlerResult::Handled)
-    }
-}
-
-struct ErrnoHandler;
-
-impl MessageHandler for ErrnoHandler {
-    fn handle<'a>(
-        &self,
-        ctx: &Context,
-        msg: &Message<'a>,
-    ) -> Result<HandlerResult, std::io::Error> {
-        if msg.params.len() < 2 || !msg.params[1].as_ref().starts_with("!errno ") {
-            return Ok(HandlerResult::NotInterested);
-        }
-
-        if let Some(x) = msg.params[1].as_ref().split(" ").skip(1).next() {
-            if let Ok(n) = x.parse::<u32>() {
-                let n = n as i32;
-                let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-                let e = std::io::Error::from_raw_os_error(n);
-                let e = if e.to_string().starts_with("Unknown error ") {
-                    "Unknown error".to_string()
-                } else {
-                    e.to_string()
-                };
-                let m = format!("{}: {}", msg.get_nick(), e.to_string());
-                ctx.message(&dst, m.as_str());
-            }
         }
 
         Ok(HandlerResult::Handled)

@@ -42,3 +42,13 @@ def get_split_args():
     if len(args) != 0:
         return re.split(r'\s+', args)
     return []
+
+
+def get_from():
+    """get the message originator, i.e. who set the message"""
+    return sys.argv[1]
+
+
+def get_to():
+    """get the message destination, e.g. where the message was sent to, e.g. a channel or you privately"""
+    return sys.argv[1]
