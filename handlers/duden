@@ -28,5 +28,4 @@ h = lines[0].split(" – ", 1)
 if len(h) == 2:
     lines = [h[0], h[1]]
     lines += ol[1:]
-lines.append("        -- {}".format("https://www.duden.de" + link))
-handler_exit(0, lines=lines, box=1, title=title, wrap_single_lines=1)
+handler_exit(0, lines=lines, link="https://www.duden.de" + link, box=1, title=title, wrap_single_lines=1)

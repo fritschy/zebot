@@ -272,6 +272,7 @@ impl MessageHandler for Callouthandler {
         //   "wrap": "0"|"1"              # optional
         //   "wrap_single_lines": "0"|"1" # optional
         //   "title": "string"            # optional
+        //   "link": "string"             # optional
         // }
 
         dbg!(&args);
@@ -350,6 +351,15 @@ impl MessageHandler for Callouthandler {
                                             );
                                         }
                                         new_lines
+                                    } else {
+                                        lines
+                                    };
+
+                                    // append link if provided
+                                    let lines = if let Some(s) = response["link"].as_str() {
+                                        let mut lines = lines;
+                                        lines.push(format!("    -- {}", s));
+                                        lines
                                     } else {
                                         lines
                                     };

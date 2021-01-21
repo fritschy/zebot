@@ -24,10 +24,7 @@ for line in bs.find("div", attrs={"class": "meaning"}).stripped_strings:
         else:
             lines[-1] += " " + line
 
-# append source
-lines.append("        -- {}".format(url))
-
 if numbered:
-    handler_exit(0, lines=lines, title=title, box=1, wrap_single_lines=1)
+    handler_exit(0, lines=lines, link=url, title=title, box=1, wrap_single_lines=1)
 else:
-    handler_exit(0, lines=lines, title=title, box=1, wrap=1)
+    handler_exit(0, lines=lines, link=url, title=title, box=1, wrap=1)

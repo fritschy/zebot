@@ -25,12 +25,12 @@ if response:
         abstract = [abstract]
         abstract_url = response.get("AbstractURL")
         if abstract_url:
-            abstract.append("        -- {}".format(abstract_url))
+            handler_exit(0, lines=abstract, link=abstract_url, wrap=1, box=1, title="abstract")
         handler_exit(0, lines=abstract, wrap=1, box=1, title="abstract")
 
     # no abstract, check related topics
     topics = response.get("RelatedTopics", [])
     if len(topics) != 0:
-        handler_exit(0, wrap=1, title="related", lines=[topics[0]['Text'], "        -- " + topics[0]['FirstURL']], box=1)
+        handler_exit(0, wrap=1, title="related", lines=[topics[0]['Text']], link=topics[0]['FirstURL'], box=1)
 
 handler_exit(0, lines=["no result from search, try https://duckduckgo.com/?q={}".format(urlquote(term))], argv=sys.argv)
