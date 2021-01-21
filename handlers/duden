@@ -7,12 +7,13 @@ args = get_split_args()
 if len(args) < 1:
     handler_exit(1, error="Not enough arguments")
 
-from bs4 import BeautifulSoup as BS
-from urllib.request import urlopen
+from urllib.request import urlopen, quote as urlquote
 
-url = "https://www.duden.de/suchen/dudenonline/{}".format(args[0])
+url = "https://www.duden.de/suchen/dudenonline/{}".format(urlquote(args[0]))
 with urlopen(url) as r:
     d = r.read()
+
+from bs4 import BeautifulSoup as BS
 
 bs = BS(d, features="lxml")
 title = bs.find("a", attrs={"class": "vignette__label"})
@@ -20,12 +21,21 @@ link = title.attrs["href"]
 title = title.text.strip()
 t = bs.find("p", attrs={"class": "vignette__snippet"}).text.strip()
 
+dots = " … "
+
 # yeah, these splits spell trouble!
-lines = t.split(" … ")
-ol = lines[:]
-h = lines[0].split(" – ", 1)
-if len(h) == 2:
-    lines = [h[0], h[1]]
-    lines += ol[1:]
-lines.append("        -- {}".format("https://www.duden.de" + link))
-handler_exit(0, lines=lines, box=1, title=title, wrap_single_lines=1)
+if t.find(dots) > 0:
+    lines = t.split(" … ")
+    ol = lines[:]
+    for i in range(len(lines)):
+        lines[i] += dots[:2]
+    h = lines[0].split(" – ", 1)
+    if len(h) == 2:
+        lines = [h[0], h[1]]
+        lines += ol[1:]
+    lines.append("        -- {}".format("https://www.duden.de" + link))
+    handler_exit(0, lines=lines, box=1, title=title, wrap_single_lines=1)
+else:
+    lines = t.split(" – ")
+    lines.append("        -- {}".format("https://www.duden.de" + link))
+    handler_exit(0, lines=lines, box=1, title=title, wrap_single_lines=1)
