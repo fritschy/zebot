@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
-from handler_lib import get_split_args, handler_exit
+from handler_lib import get_args, handler_exit
 
-args = get_split_args()
+args = get_args()
 
 if len(args) < 1:
     handler_exit(1, error="Not enough arguments")
 
 from urllib.request import urlopen, quote as urlquote
 
-url = "https://www.duden.de/suchen/dudenonline/{}".format(urlquote(args[0]))
+url = "https://www.duden.de/suchen/dudenonline/{}".format(urlquote(args))
 with urlopen(url) as r:
     d = r.read()
 
