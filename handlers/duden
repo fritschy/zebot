@@ -9,6 +9,8 @@ if len(args) < 1:
 
 from urllib.request import urlopen, quote as urlquote
 
+#args = "".join(filter(lambda x: x.isalpha(), args))
+
 url = "https://www.duden.de/suchen/dudenonline/{}".format(urlquote(args))
 with urlopen(url) as r:
     d = r.read()
@@ -21,11 +23,29 @@ link = title.attrs["href"]
 title = title.text.strip()
 t = bs.find("p", attrs={"class": "vignette__snippet"}).text.strip()
 
+dash = " – "
+dots = " … "
+
+if t.find(dash) > 0:
+    kind, t = t.split(dash)
+    lines = [kind]
+else:
+    lines = []
+
 # yeah, these splits spell trouble!
-lines = t.split(" … ")
-ol = lines[:]
-h = lines[0].split(" – ", 1)
-if len(h) == 2:
-    lines = [h[0], h[1]]
-    lines += ol[1:]
+if t.find(dots) > 0:
+    lines += t.split(dots)
+    lines = list(map(lambda x: x + dots[:2] if x.find(dots[1]) == -1 else x, lines))
+else:
+    lines.append(t)
+
+#if any(map(lambda x: x.find("; ") > 0, lines)):
+#    new_lines = []
+#    for l in lines:
+#        nl = l.split("; ")
+#        new_lines += nl
+#    lines = new_lines
+
+lines = list(filter(lambda x: len(x) > 3, lines))
+
 handler_exit(0, lines=lines, link="https://www.duden.de" + link, box=1, title=title, wrap_single_lines=1)
