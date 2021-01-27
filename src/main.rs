@@ -230,7 +230,7 @@ fn is_json_flag_set(jv: &JsonValue) -> bool {
 }
 
 struct SubstituteLastHandler {
-    last_msg: RefCell<HashMap<String, String>>,
+    last_msg: RefCell<HashMap<(String, String), String>>,
 }
 
 impl SubstituteLastHandler {
@@ -323,16 +323,16 @@ impl MessageHandler for SubstituteLastHandler {
         msg: &Message<'a>,
     ) -> Result<HandlerResult, std::io::Error> {
         let nick = msg.get_nick();
+        let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
 
-        if !msg.params[1].starts_with("!s") {
-            self.last_msg.borrow_mut().insert(nick, msg.params[1].to_string());
+        if !msg.params[1].starts_with("!s") && !msg.params[1].starts_with("!S") {
+            self.last_msg.borrow_mut().insert((dst.clone(), nick.clone()), msg.params[1].to_string());
             dbg!(msg.params[1].to_string());
             return Ok(HandlerResult::NotInterested);
         }
 
         let re = &msg.params[1][1..];
-
-        let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+        let big_s = msg.params[1].chars().skip(1).next().unwrap() == 'S';
 
         let (pat, subst, flags) = if let Some(x) = parse_substitution(re) {
             x
@@ -343,7 +343,7 @@ impl MessageHandler for SubstituteLastHandler {
 
         match regex::Regex::new(pat) {
             Ok(re) => {
-                if let Some(last) = self.last_msg.borrow().get(&nick) {
+                if let Some(last) = self.last_msg.borrow().get(&(dst.clone(), nick.clone())) {
                     let new_msg = if flags.find("g").is_some() {
                         re.replace_all(last, subst)
                     } else if let Ok(n) = flags.parse::<usize>() {
@@ -352,7 +352,11 @@ impl MessageHandler for SubstituteLastHandler {
                         re.replace(last, subst)
                     };
                     if new_msg != last.as_str() {
-                        let new_msg = format!("{} meinte: {}", nick, new_msg);
+                        let new_msg = if big_s {
+                            format!("{} meinte: {}", nick, new_msg)
+                        } else {
+                            new_msg.to_string()
+                        };
                         ctx.message(&dst, &new_msg);
                     }
                 }
