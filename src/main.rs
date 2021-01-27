@@ -14,6 +14,9 @@ use std::fmt::Display;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use stopwatch::Stopwatch;
+use std::collections::HashMap;
+use std::error::Error;
+use std::cell::RefCell;
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args
@@ -47,6 +50,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     context.register_handler(CommandCode::PrivMsg, Box::new(Callouthandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ZeBotAnswerHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
+    context.register_handler(CommandCode::PrivMsg, Box::new(SubstituteLastHandler::new()));
 
     context.logon();
 
@@ -225,6 +229,145 @@ fn is_json_flag_set(jv: &JsonValue) -> bool {
     jv.as_bool().unwrap_or_else(|| false.into()) || jv.as_number().unwrap_or_else(|| 0.into()) != 0
 }
 
+struct SubstituteLastHandler {
+    last_msg: RefCell<HashMap<String, String>>,
+}
+
+impl SubstituteLastHandler {
+    fn new() -> Self {
+        SubstituteLastHandler {
+            last_msg: RefCell::new(HashMap::new()),
+        }
+    }
+}
+
+fn parse_substitution<'a>(re: &'a str) -> Option<(&'a str, &'a str, &'a str)> {
+    let mut s = 0;
+    let mut sep = '\0';
+    let mut pat = 0..0;
+    let mut subst = 0..0;
+    let mut flags = 0..0;
+    for (i, c) in re.chars().enumerate() {
+        match s {
+            0 => {
+                if c != 's' {
+                    eprintln!("Not a substitution");
+                    return None;
+                }
+                s = 1;
+            }
+
+            1 => {
+                if c != '/' && c != '#' && c != ',' && c != ':' {
+                    eprintln!("Invalid separator");
+                    return None;
+                }
+                sep = c;
+                s = 2;
+            }
+
+            2 => {
+                if c == sep {
+                    s = 3;
+                } else {
+                    if pat.start == 0 {
+                        pat.start = i;
+                        pat.end = i;
+                    }
+                    pat.end += 1;
+                }
+            }
+
+            3 => {
+                if c == sep {
+                    s = 4;
+                } else {
+                    if subst.start == 0 {
+                        subst.start = i;
+                        subst.end = i;
+                    }
+                    subst.end += 1;
+                }
+            }
+
+            4 => {
+                match c {
+                    'g' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
+                        if flags.start == 0 {
+                            flags.start = i;
+                            flags.end = i;
+                        }
+                        flags.end += 1;
+                    }
+                    _ => {
+                        eprintln!("Invalid flags");
+                        return None;
+                    }
+                }
+            }
+
+            _ => {
+                eprintln!("Invalid state parsing re");
+                return None;
+            }
+        }
+    }
+
+    return Some((&re[pat], &re[subst], &re[flags]))
+}
+
+impl MessageHandler for SubstituteLastHandler {
+    fn handle<'a>(
+        &self,
+        ctx: &Context,
+        msg: &Message<'a>,
+    ) -> Result<HandlerResult, std::io::Error> {
+        let nick = msg.get_nick();
+
+        if !msg.params[1].starts_with("!s") {
+            self.last_msg.borrow_mut().insert(nick, msg.params[1].to_string());
+            dbg!(msg.params[1].to_string());
+            return Ok(HandlerResult::NotInterested);
+        }
+
+        let re = &msg.params[1][1..];
+
+        let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+
+        let (pat, subst, flags) = if let Some(x) = parse_substitution(re) {
+            x
+        } else {
+            ctx.message(&dst, "Could not parse substitution");
+            return Ok(HandlerResult::Handled);
+        };
+
+        match regex::Regex::new(pat) {
+            Ok(re) => {
+                if let Some(last) = self.last_msg.borrow().get(&nick) {
+                    let new_msg = if flags.find("g").is_some() {
+                        re.replace_all(last, subst)
+                    } else if let Ok(n) = flags.parse::<usize>() {
+                        re.replacen(last, n, subst)
+                    } else {
+                        re.replace(last, subst)
+                    };
+                    if new_msg != last.as_str() {
+                        let new_msg = format!("{} meinte: {}", nick, new_msg);
+                        ctx.message(&dst, &new_msg);
+                    }
+                }
+            }
+
+            Err(_) => {
+                ctx.message(&dst, "Could not parse regex");
+                return Ok(HandlerResult::Handled);
+            }
+        }
+
+        Ok(HandlerResult::Handled)
+    }
+}
+
 struct Callouthandler;
 
 impl MessageHandler for Callouthandler {
@@ -245,8 +388,8 @@ impl MessageHandler for Callouthandler {
             .chars()
             .all(|x| x.is_ascii_alphanumeric() || x == '-' || x == '_')
         {
-            eprintln!("Invalid command {}", command);
-            return Ok(HandlerResult::Error("Invalid handler".to_string()));
+            eprintln!("CalloutHandler: Invalid command {}", command);
+            return Ok(HandlerResult::NotInterested);
         }
 
         let command = command.to_lowercase();
