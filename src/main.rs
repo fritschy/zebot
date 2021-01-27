@@ -15,7 +15,6 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use stopwatch::Stopwatch;
 use std::collections::HashMap;
-use std::error::Error;
 use std::cell::RefCell;
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
@@ -242,7 +241,7 @@ impl SubstituteLastHandler {
 }
 
 fn parse_substitution<'a>(re: &'a str) -> Option<(&'a str, &'a str, &'a str)> {
-    let mut s = 0;
+    let mut s = 0;  // state, see below, can only increment
     let mut sep = '\0';
     let mut pat = 0..0;
     let mut subst = 0..0;
@@ -250,7 +249,7 @@ fn parse_substitution<'a>(re: &'a str) -> Option<(&'a str, &'a str, &'a str)> {
     for (i, c) in re.chars().enumerate() {
         match s {
             0 => {
-                if c != 's' {
+                if c != 's' && c != 'S' {
                     eprintln!("Not a substitution");
                     return None;
                 }
