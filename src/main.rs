@@ -240,13 +240,13 @@ impl SubstituteLastHandler {
     }
 }
 
-fn parse_substitution<'a>(re: &'a str) -> Option<(&'a str, &'a str, &'a str)> {
+fn parse_substitution(re: &str) -> Option<(String, String, String)> {
     let mut s = 0;  // state, see below, can only increment
     let mut sep = '\0';
-    let mut pat = 0..0;
-    let mut subst = 0..0;
-    let mut flags = 0..0;
-    for (i, c) in re.chars().enumerate() {
+    let mut pat = String::with_capacity(re.len());
+    let mut subst = String::with_capacity(re.len());
+    let mut flags = String::with_capacity(re.len());
+    for c in re.chars() {
         match s {
             0 => {
                 if c != 's' && c != 'S' {
@@ -269,11 +269,7 @@ fn parse_substitution<'a>(re: &'a str) -> Option<(&'a str, &'a str, &'a str)> {
                 if c == sep {
                     s = 3;
                 } else {
-                    if pat.start == 0 {
-                        pat.start = i;
-                        pat.end = i;
-                    }
-                    pat.end += 1;
+                    pat.push(c);
                 }
             }
 
@@ -281,22 +277,14 @@ fn parse_substitution<'a>(re: &'a str) -> Option<(&'a str, &'a str, &'a str)> {
                 if c == sep {
                     s = 4;
                 } else {
-                    if subst.start == 0 {
-                        subst.start = i;
-                        subst.end = i;
-                    }
-                    subst.end += 1;
+                    subst.push(c);
                 }
             }
 
             4 => {
                 match c {
                     'g' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
-                        if flags.start == 0 {
-                            flags.start = i;
-                            flags.end = i;
-                        }
-                        flags.end += 1;
+                        flags.push(c);
                     }
                     _ => {
                         eprintln!("Invalid flags");
@@ -312,7 +300,7 @@ fn parse_substitution<'a>(re: &'a str) -> Option<(&'a str, &'a str, &'a str)> {
         }
     }
 
-    return Some((&re[pat], &re[subst], &re[flags]))
+    Some((pat, subst, flags))
 }
 
 impl MessageHandler for SubstituteLastHandler {
@@ -325,8 +313,12 @@ impl MessageHandler for SubstituteLastHandler {
         let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
 
         if !msg.params[1].starts_with("!s") && !msg.params[1].starts_with("!S") {
+            if msg.params[1].starts_with("\x01ACTION") {
+                eprintln!("Ignoring ACTION message");
+                return Ok(HandlerResult::NotInterested);
+            }
             self.last_msg.borrow_mut().insert((dst.clone(), nick.clone()), msg.params[1].to_string());
-            dbg!(msg.params[1].to_string());
+            eprintln!("{} new last message '{}'", nick, msg.params[1].to_string());
             return Ok(HandlerResult::NotInterested);
         }
 
@@ -340,15 +332,15 @@ impl MessageHandler for SubstituteLastHandler {
             return Ok(HandlerResult::Handled);
         };
 
-        match regex::Regex::new(pat) {
+        match regex::Regex::new(&pat) {
             Ok(re) => {
                 if let Some(last) = self.last_msg.borrow().get(&(dst.clone(), nick.clone())) {
                     let new_msg = if flags.find("g").is_some() {
-                        re.replace_all(last, subst)
+                        re.replace_all(last, subst.as_str())
                     } else if let Ok(n) = flags.parse::<usize>() {
-                        re.replacen(last, n, subst)
+                        re.replacen(last, n, subst.as_str())
                     } else {
-                        re.replace(last, subst)
+                        re.replace(last, subst.as_str())
                     };
                     if new_msg != last.as_str() {
                         let new_msg = if big_s {
@@ -391,7 +383,6 @@ impl MessageHandler for Callouthandler {
             .chars()
             .all(|x| x.is_ascii_alphanumeric() || x == '-' || x == '_')
         {
-            eprintln!("CalloutHandler: Invalid command {}", command);
             return Ok(HandlerResult::NotInterested);
         }
 
