@@ -6,6 +6,7 @@ pub enum Prefix {
     Server(String),
     Nickname(Nickname),
 }
+
 impl Display for Prefix {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         match self {
@@ -200,7 +201,7 @@ mod parsers {
         Ok((i, Prefix::Nickname(Nickname {
             nickname: nick,
             host: if let Some((_, ref u)) = rest { Some(u.clone()) } else { None },
-            user: if let Some((ref u, _)) = rest { u.clone() } else { None },
+            user: if let Some((u, _)) = rest { u } else { None },
         })))
     }
 
