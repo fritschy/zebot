@@ -200,7 +200,7 @@ mod parsers {
         let (i, _) = char(' ')(i)?;
         Ok((i, Prefix::Nickname(Nickname {
             nickname: nick,
-            host: if let Some((_, ref u)) = rest { Some(u.clone()) } else { None },
+            host: if let Some((_, u)) = &rest { Some(u.clone()) } else { None },
             user: if let Some((u, _)) = rest { u } else { None },
         })))
     }
