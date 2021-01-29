@@ -1,6 +1,6 @@
 use nom::IResult;
 
-pub fn parse<'a>(mut i: &'a [u8]) -> IResult<&'a [u8], ()> {
+pub fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
     loop {
         match parsers::message(i) {
             Ok((r, msg)) => {
@@ -71,7 +71,7 @@ mod parsers {
     }
 
     // rfc2812.txt:321
-    pub fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], (Option<String>, String, Vec<String>)> {
+    pub fn message(i: &[u8]) -> IResult<&[u8], (Option<String>, String, Vec<String>)> {
         let (i, prefix) = opt(parsers::prefix)(i)?;
         let (i, command) = parsers::command(i)?;
         let (i, p) = opt(params)(i)?;
@@ -80,14 +80,14 @@ mod parsers {
     }
 
     // rfc2812.txt:329
-    pub fn middle<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn middle(i: &[u8]) -> IResult<&[u8], String> {
         let (i, first) = nospcrlfcl(i)?;
         let (i, rest) = many0(alt((char(':'), nospcrlfcl)))(i)?;
         Ok((i, string_from_parts(first, &rest)))
     }
 
     // rfc2812.txt:324
-    pub fn params<'a>(i: &'a [u8]) -> IResult<&'a [u8], Vec<String>> {
+    pub fn params(i: &[u8]) -> IResult<&[u8], Vec<String>> {
         map(alt((params_1, params_2)), |(mut v, x)| {
             v.push(x);
             v
@@ -95,13 +95,13 @@ mod parsers {
     }
 
     // rfc2812.txt:324
-    pub fn params_1<'a>(i: &'a [u8]) -> IResult<&'a [u8], (Vec<String>, String)> {
-        fn part_1<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn params_1(i: &[u8]) -> IResult<&[u8], (Vec<String>, String)> {
+        fn part_1(i: &[u8]) -> IResult<&[u8], String> {
             let (i, _) = char(' ')(i)?;
             let (i, m) = middle(i)?;
             Ok((i, m))
         }
-        fn part_2<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+        fn part_2(i: &[u8]) -> IResult<&[u8], String> {
             let (i, _) = char(' ')(i)?;
             let (i, _) = char(':')(i)?;
             let (i, trail) = trailing(i)?;
@@ -113,15 +113,15 @@ mod parsers {
     }
 
     // rfc2812.txt:330
-    pub fn trailing<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn trailing(i: &[u8]) -> IResult<&[u8], String> {
         map(many0(alt((char(' '), char(':'), nospcrlfcl))), vec2string)(i)
     }
 
     // rfc2812.txt:325
-    pub fn params_2<'a>(i: &'a [u8]) -> IResult<&'a [u8], (Vec<String>, String)> {
+    pub fn params_2(i: &[u8]) -> IResult<&[u8], (Vec<String>, String)> {
         let (i, _) = char(' ')(i)?;
         let (i, m) = many_m_n(14, 14, middle)(i)?;
-        fn part_2<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+        fn part_2(i: &[u8]) -> IResult<&[u8], String> {
             let (i, _) = char(' ')(i)?;
             let (i, _) = opt(char(':'))(i)?;
             let (i, trail) = trailing(i)?;
@@ -132,12 +132,12 @@ mod parsers {
     }
 
     // rfc2812.txt:327
-    pub fn nospcrlfcl<'a>(i: &'a [u8]) -> IResult<&'a [u8], char> {
+    pub fn nospcrlfcl(i: &[u8]) -> IResult<&[u8], char> {
         none_of("\0\r\n :")(i)
     }
 
     // rfc2812.txt:322
-    pub fn prefix<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn prefix(i: &[u8]) -> IResult<&[u8], String> {
         let (i, _) = char(':')(i)?;
         let (i, servnick) = alt((nickname_part, servername))(i)?;
         let (i, _) = char(' ')(i)?;
@@ -145,7 +145,7 @@ mod parsers {
     }
 
     // rfc2812.txt:322
-    pub fn nickname_part<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn nickname_part(i: &[u8]) -> IResult<&[u8], String> {
         let (i, nick) = nickname(i)?;
         let (i, excl) = opt(char('!'))(i)?;
         if let Some(excl) = excl {
@@ -162,13 +162,12 @@ mod parsers {
     }
 
     // rfc2812.txt:366
-    pub fn servername<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn servername(i: &[u8]) -> IResult<&[u8], String> {
         hostname(i)
-        // alt((ip4addr, ip6addr))(i)
     }
 
     // rfc2812.txt:373
-    pub fn ip4addr<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn ip4addr(i: &[u8]) -> IResult<&[u8], String> {
         let (i, a) = be_u8(i)?;
         let (i, _) = char('.')(i)?;
         let (i, b) = be_u8(i)?;
@@ -181,24 +180,24 @@ mod parsers {
     }
 
     // rfc2812.txt:374
-    pub fn ip6addr<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn ip6addr(i: &[u8]) -> IResult<&[u8], String> {
         // FIXME
         let (i, x) = take_until(" ")(i)?;
         Ok((i, String::from_utf8_lossy(x).to_string()))
     }
 
     // rfc2812.txt:367
-    pub fn host<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn host(i: &[u8]) -> IResult<&[u8], String> {
         alt((hostname, hostaddr))(i)
     }
 
     // rfc2812.txt:372
-    pub fn hostaddr<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn hostaddr(i: &[u8]) -> IResult<&[u8], String> {
         alt((ip4addr, ip6addr))(i)
     }
 
     // rfc2812.txt:368
-    pub fn hostname<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn hostname(i: &[u8]) -> IResult<&[u8], String> {
         let (i, first) = shortname(i)?;
         let (i, dot) = many0(dot_prefixed(shortname))(i)?;
         Ok((i, first + &dot.into_iter().collect::<String>()))
@@ -214,7 +213,7 @@ mod parsers {
     }
 
     // rfc2812.txt:369
-    pub fn shortname<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn shortname(i: &[u8]) -> IResult<&[u8], String> {
         let (i, first) = alt((letter, digit))(i)?;
         let (i, mut rest) = many0(alt((letter, digit, char('-'))))(i)?;
         let (i, mut more) = many0(alt((letter, digit)))(i)?;
@@ -223,7 +222,7 @@ mod parsers {
     }
 
     // rfc2812.txt:323
-    pub fn command<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn command(i: &[u8]) -> IResult<&[u8], String> {
         let (i, cmd) = alt((
             take_while_m_n(3, 3, is_digit),
             take_until(" ")))(i)?;
@@ -232,29 +231,29 @@ mod parsers {
     }
 
     // rfc2812.txt:401
-    pub fn user<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn user(i: &[u8]) -> IResult<&[u8], String> {
         map(many1(none_of("\0\r\n @")), |x| x.into_iter().collect::<String>())(i)
     }
 
     // rfc2812.txt:376
-    pub fn nickname<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+    pub fn nickname(i: &[u8]) -> IResult<&[u8], String> {
         let (i, first) = alt((letter, special))(i)?;
         let (i, rest) = many_m_n(0, 8, alt((letter, digit, special, char('-'))))(i)?;
         Ok((i, utils::string_from_parts(first, &rest)))
     }
 
     // rfc2812.txt:407
-    pub fn digit<'a>(i: &'a [u8]) -> IResult<&'a [u8], char> {
+    pub fn digit(i: &[u8]) -> IResult<&[u8], char> {
         one_of("0123456789")(i)
     }
 
     // rfc2812.txt:406
-    pub fn letter<'a>(i: &'a [u8]) -> IResult<&'a [u8], char> {
+    pub fn letter(i: &[u8]) -> IResult<&[u8], char> {
         one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")(i)
     }
 
     // rfc2812.txt:409
-    pub fn special<'a>(i: &'a [u8]) -> IResult<&'a [u8], char> {
+    pub fn special(i: &[u8]) -> IResult<&[u8], char> {
         one_of("\x5b\x5c\x5d\x5e\x5f\x60\x7b\x7c\x7d[]\\`_^{|}")(i)
     }
 }
