@@ -246,12 +246,21 @@ mod parsers {
     pub fn hostname(i: &[u8]) -> IResult<&[u8], String> {
         let (i, first) = shortname(i)?;
         let (i, dot) = many0(dot_prefixed(shortname))(i)?;
-        Ok((i, first + &dot.into_iter().collect::<String>()))
+        // XXX freenode services have a . at the end of ther host
+        let (i, dot2) = opt(char('.'))(i)?;
+        let ret = first + &dot.into_iter().collect::<String>();
+        let ret = if let Some(d) = dot2 {
+            ret + "."
+        } else {
+            ret
+        };
+        Ok((i, ret))
     }
 
     pub fn dot_prefixed<'a>(p: impl Fn(&'a [u8]) -> IResult<&'a [u8], String>) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], String> {
         move |i: &[u8]| {
-            let (i, dot) = char('.')(i)?;
+            // XXX we need to match / too, as these are used by freenode bots/services
+            let (i, dot) = alt((char('.'), char('/')))(i)?;
             let (i, rest) = p(i)?;
             let res = String::from(dot) + rest.as_str();
             Ok((i, res))
@@ -284,7 +293,9 @@ mod parsers {
     // rfc2812.txt:376
     pub fn nickname(i: &[u8]) -> IResult<&[u8], String> {
         let (i, first) = alt((letter, special))(i)?;
-        let (i, rest) = many_m_n(0, 8, alt((letter, digit, special, char('-'))))(i)?;
+        // XXX the RFC specifies only up to 8 additional chars, however, e.g. freenode
+        //     names may be way longer ... just go all out and use many0 to capture it all
+        let (i, rest) = many0(alt((letter, digit, special, char('-'))))(i)?;
         Ok((i, utils::string_from_parts(first, &rest)))
     }
 
@@ -323,5 +334,43 @@ mod tests {
         assert!(format!("{}", prefix) == "fritschy!~fritschy@localhost");
         assert!(msg.1 == "PRIVMSG");
         assert!(msg.2 == ["#zebot-test", "moep"]);
+    }
+
+    #[test]
+    fn freenode_nickserv() {
+        let i = b":NickServ!NickServ@services. NOTICE ZeBot :This nickname is registered. Please choose a different nickname, or identify via \x02/msg NickServ identify <password>\x02.\r\n";
+        let i = &i[..];
+
+        let r = super::parsers::message(i);
+
+        assert!(r.is_ok());
+        let r = r.unwrap();
+
+        let msg = r.1;
+        assert!(msg.0.is_some());
+
+        let prefix = msg.0.unwrap();
+        assert!(format!("{}", prefix) == "NickServ!NickServ@services.");
+        assert!(msg.1 == "NOTICE");
+        assert!(msg.2 == ["ZeBot", "This nickname is registered. Please choose a different nickname, or identify via \u{2}/msg NickServ identify <password>\u{2}."]);
+    }
+
+    #[test]
+    fn freenode_bot_frigg() {
+        let i = b":freenode-connect!frigg@freenode/utility-bot/frigg PRIVMSG ZeBot :\x01VERSION\x01\r\n";
+        let i = &i[..];
+
+        let r = super::parsers::message(i);
+
+        assert!(r.is_ok());
+        let r = r.unwrap();
+
+        let msg = r.1;
+        assert!(msg.0.is_some());
+
+        let prefix = msg.0.unwrap();
+        assert!(format!("{}", prefix) == "freenode-connect!frigg@freenode/utility-bot/frigg");
+        assert!(msg.1 == "PRIVMSG");
+        assert!(msg.2 == ["ZeBot", "\u{1}VERSION\u{1}"]);
     }
 }

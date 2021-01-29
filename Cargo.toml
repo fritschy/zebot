@@ -21,3 +21,7 @@ regex = "1"
 #debug = true
 lto = true
 codegen-units = 1
+
+[profile.test]
+debug = true
+opt-level = 0
