@@ -257,10 +257,6 @@ fn parse_substitution(re: &str) -> Option<(String, String, String)> {
             }
 
             1 => {
-                if c != '/' && c != '#' && c != ',' && c != ':' {
-                    eprintln!("Invalid separator");
-                    return None;
-                }
                 sep = c;
                 s = 2;
             }
@@ -283,7 +279,7 @@ fn parse_substitution(re: &str) -> Option<(String, String, String)> {
 
             4 => {
                 match c {
-                    'g' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => {
+                    'g' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 's' => {
                         flags.push(c);
                     }
                     _ => {
@@ -295,6 +291,7 @@ fn parse_substitution(re: &str) -> Option<(String, String, String)> {
 
             _ => {
                 eprintln!("Invalid state parsing re");
+                dbg!(&re, &c, &s);
                 return None;
             }
         }
@@ -332,6 +329,12 @@ impl MessageHandler for SubstituteLastHandler {
             return Ok(HandlerResult::Handled);
         };
 
+        let (flags, save_subst) = if let Some(s) = flags.find("s") {
+            (flags.replace("s", ""), true)
+        } else {
+            (flags, false)
+        };
+
         match regex::Regex::new(&pat) {
             Ok(re) => {
                 if let Some(last) = self.last_msg.borrow().get(&(dst.clone(), nick.clone())) {
@@ -342,12 +345,19 @@ impl MessageHandler for SubstituteLastHandler {
                     } else {
                         re.replace(last, subst.as_str())
                     };
+
                     if new_msg != last.as_str() {
+                        // if save_subst {
+                        //     self.last_msg.borrow_mut().insert((dst.clone(), nick.clone()), new_msg.to_string());
+                        //     eprintln!("{} new last message '{}'", nick, msg.params[1].to_string());
+                        // }
+
                         let new_msg = if big_s {
                             format!("{} meinte: {}", nick, new_msg)
                         } else {
                             new_msg.to_string()
                         };
+
                         ctx.message(&dst, &new_msg);
                     }
                 }
