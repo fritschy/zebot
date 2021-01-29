@@ -311,7 +311,7 @@ mod parsers {
 
     // rfc2812.txt:409
     pub fn special(i: &[u8]) -> IResult<&[u8], char> {
-        one_of("\x5b\x5c\x5d\x5e\x5f\x60\x7b\x7c\x7d[]\\`_^{|}")(i)
+        one_of("[]\\`_^{|}")(i)
     }
 }
 
