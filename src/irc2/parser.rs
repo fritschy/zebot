@@ -373,4 +373,20 @@ mod tests {
         assert!(msg.1 == "PRIVMSG");
         assert!(msg.2 == ["ZeBot", "\u{1}VERSION\u{1}"]);
     }
+
+    #[test]
+    fn freenode_motd_and_stuff() {
+        let i = b":weber.freenode.net 372 ZeBot :- #freenode and using the \'/who freenode/staff/*\' command. You may message\r\n:weber.freenode.net 372 ZeBot :- any of us at any time. Please note that freenode predominantly provides \r\n:weber.freenode.net 372 ZeBot :- assistance via private message, and while we have a network channel the \r\n:weber.freenode.net 372 ZeBot :- primary venue for support requests is via private message to a member \r\n:weber.freenode.net 372 ZeBot :- of the volunteer staff team.\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- From time to time, volunteer staff may send server-wide notices relating to\r\n:weber.freenode.net 372 ZeBot :- the project, or the communities that we host. The majority of such notices\r\n:weber.freenode.net 372 ZeBot :- will be sent as wallops, and you can \'/mode <yournick> +w\' to ensure that you\r\n:weber.freenode.net 372 ZeBot :- do not miss them. Important messages relating to the freenode project, including\r\n:weber.freenode.net 372 ZeBot :- notices of upcoming maintenance and other scheduled downtime will be issued as\r\n:weber.freenode.net 372 ZeBot :- global notices.\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- Representing an on-topic project? Don\'t forget to register, more information\r\n:weber.freenode.net 372 ZeBot :- can be found on the https://freenode.net website under \"Group Registration\".\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- Thank you also to our server sponsors for the sustained support in keeping the\r\n:weber.freenode.net 372 ZeBot :- network going for close to two decades.\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- Thank you for using freenode!\r\n:weber.freenode.net 376 ZeBot :End of /MOTD command.\r\n:ZeBot MODE ZeBot :+i\r\n:NickServ!NickServ@services. NOTICE ZeBot :This nickname is registered. Please choose a different nickname, or identify via \x02/msg NickServ identify <password>\x02.\r\n";
+        let mut i = &i[..];
+
+        let nmsg = i.split(|&x| x == b'\r').count() - 1;
+
+        for _ in 0..nmsg {
+            let r = super::parsers::message(i);
+            assert!(r.is_ok());
+            i = r.unwrap().0;
+        }
+
+        assert!(super::parsers::message(i).is_err());
+    }
 }
