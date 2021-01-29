@@ -17,6 +17,7 @@ pub use handler::*;
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+use crate::irc2;
 
 pub struct User {
     pub nick: String,
@@ -250,6 +251,10 @@ impl Context {
         }
 
         let mut i = &self.bufs.buf.borrow()[..bytes];
+
+        // feed the received message to the experimental parser ...
+        irc2::parse_ng(i);
+
         loop {
             match message(i) {
                 Ok((r, msg)) => {

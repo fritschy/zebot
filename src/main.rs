@@ -1,6 +1,9 @@
 mod irc;
 use irc::*;
 
+mod irc2;
+pub(crate) use irc2::*;
+
 use std::net::ToSocketAddrs;
 
 use futures_util::future::FutureExt;
