@@ -1,7 +1,43 @@
 use nom::IResult;
+use nom::lib::std::fmt::Display;
+
+#[derive(Debug, PartialEq)]
+pub enum Prefix {
+    Server(String),
+    Nickname(Nickname),
+}
+impl Display for Prefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            Prefix::Server(s) => write!(f, "{}", s),
+            Prefix::Nickname(n) => write!(f, "{}", n),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Nickname {
+    nickname: String,
+    user: Option<String>,
+    host: Option<String>,
+}
+
+impl Display for Nickname {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.nickname)?;
+        if let Some(host) = &self.host {
+            if let Some(user) = &self.user {
+                write!(f, "!{}", user)?;
+            }
+            write!(f, "@{}", host)?;
+        }
+        Ok(())
+    }
+}
 
 pub fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
     loop {
+        dbg!(String::from_utf8_lossy(i).to_string());
         match parsers::message(i) {
             Ok((r, msg)) => {
                 dbg!(msg);
@@ -71,7 +107,7 @@ mod parsers {
     }
 
     // rfc2812.txt:321
-    pub fn message(i: &[u8]) -> IResult<&[u8], (Option<String>, String, Vec<String>)> {
+    pub fn message(i: &[u8]) -> IResult<&[u8], (Option<Prefix>, String, Vec<String>)> {
         let (i, prefix) = opt(parsers::prefix)(i)?;
         let (i, command) = parsers::command(i)?;
         let (i, p) = opt(params)(i)?;
@@ -137,33 +173,42 @@ mod parsers {
     }
 
     // rfc2812.txt:322
-    pub fn prefix(i: &[u8]) -> IResult<&[u8], String> {
+    pub fn prefix(i: &[u8]) -> IResult<&[u8], Prefix> {
         let (i, _) = char(':')(i)?;
-        let (i, servnick) = alt((nickname_part, servername))(i)?;
-        let (i, _) = char(' ')(i)?;
+        let (i, servnick) = alt((servername, nickname_part))(i)?;
+        // Note: the trailing SPACE needed to be pulled into the subparsers in order to
+        //       differentiate the different parts.
         Ok((i, servnick))
     }
 
     // rfc2812.txt:322
-    pub fn nickname_part(i: &[u8]) -> IResult<&[u8], String> {
+    pub fn nickname_part(i: &[u8]) -> IResult<&[u8], Prefix> {
         let (i, nick) = nickname(i)?;
-        let (i, excl) = opt(char('!'))(i)?;
-        if let Some(excl) = excl {
-            let (i, usr) = user(i)?;
-            let (i, at) = opt(char('@'))(i)?;
-            let nick = string_plus_char(nick, excl) + usr.as_str();
-            if let Some(at) = at {
-                let (i, hst) = host(i)?;
-                return Ok((i, string_plus_char(nick, at) + hst.as_str()));
-            }
-            return Ok((i, nick));
+        fn excl_user(i: &[u8]) -> IResult<&[u8], String> {
+            let (i, excl) = char('!')(i)?;
+            let (i, user) = user(i)?;
+            Ok((i, user))
         }
-        Ok((i, nick))
+        fn at_host(i: &[u8]) -> IResult<&[u8], (Option<String>, String)> {
+            let (i, u) = opt(excl_user)(i)?;
+            let (i, at) = char('@')(i)?;
+            let (i, h) = host(i)?;
+            Ok((i, (u, h)))
+        }
+        let (i, rest) = opt(at_host)(i)?;
+        let (i, _) = char(' ')(i)?;
+        Ok((i, Prefix::Nickname(Nickname {
+            nickname: nick,
+            host: if let Some((_, ref u)) = rest { Some(u.clone()) } else { None },
+            user: if let Some((ref u, _)) = rest { u.clone() } else { None },
+        })))
     }
 
     // rfc2812.txt:366
-    pub fn servername(i: &[u8]) -> IResult<&[u8], String> {
-        hostname(i)
+    pub fn servername(i: &[u8]) -> IResult<&[u8], Prefix> {
+        let (i, s) = map(hostname, |x| Prefix::Server(x))(i)?;
+        let (i, _) = char(' ')(i)?;
+        Ok((i, s))
     }
 
     // rfc2812.txt:373
@@ -255,5 +300,27 @@ mod parsers {
     // rfc2812.txt:409
     pub fn special(i: &[u8]) -> IResult<&[u8], char> {
         one_of("\x5b\x5c\x5d\x5e\x5f\x60\x7b\x7c\x7d[]\\`_^{|}")(i)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn privmsg() {
+        let i = b":fritschy!~fritschy@localhost PRIVMSG #zebot-test :moep\r\n";
+        let i = &i[..];
+
+        let r = super::parsers::message(i);
+
+        assert!(r.is_ok());
+        let r = r.unwrap();
+
+        let msg = r.1;
+        assert!(msg.0.is_some());
+
+        let prefix = msg.0.unwrap();
+        assert!(format!("{}", prefix) == "fritschy!~fritschy@localhost");
+        assert!(msg.1 == "PRIVMSG");
+        assert!(msg.2 == ["#zebot-test", "moep"]);
     }
 }
