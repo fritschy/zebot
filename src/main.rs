@@ -2,7 +2,6 @@ mod irc;
 use irc::*;
 
 mod irc2;
-pub(crate) use irc2::*;
 
 use std::net::ToSocketAddrs;
 
@@ -332,7 +331,7 @@ impl MessageHandler for SubstituteLastHandler {
             return Ok(HandlerResult::Handled);
         };
 
-        let (flags, save_subst) = if let Some(s) = flags.find("s") {
+        let (flags, _save_subst) = if let Some(_) = flags.find("s") {
             (flags.replace("s", ""), true)
         } else {
             (flags, false)

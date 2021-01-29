@@ -1,4 +1,4 @@
-use nom::{IResult, FindSubstring};
+use nom::IResult;
 
 pub fn parse<'a>(mut i: &'a [u8]) -> IResult<&'a [u8], ()> {
     loop {
@@ -24,48 +24,38 @@ mod parsers {
     use nom::{
         branch::alt,
         bytes::complete::{
-            tag,
-            take_till1,
             take_until,
-            take_while,
             take_while_m_n,
         },
         character::{
             complete::{
-                anychar, char, none_of, one_of,
-                space1,
+                char, crlf, none_of,
+                one_of,
             },
-            is_alphabetic,
             is_digit,
         },
         combinator::{
-            eof,
             map,
             opt,
         },
-        error::Error,
         IResult,
         multi::{
-            count,
             many0,
             many1,
             many_m_n,
-            many_till,
         },
+        number::complete::be_u8,
     };
-    use nom::number::complete::be_u8;
 
     use crate::irc2::parser::parsers::utils::{string_from_parts, string_plus_char, vec2string};
 
     use super::*;
-    use nom::character::complete::crlf;
-    use nom::combinator::not;
-    use nom::multi::fold_many0;
 
     mod utils {
         pub fn vec2string(v: Vec<char>) -> String {
             v.into_iter().collect()
         }
+
         pub fn string_from_parts(first: char, rest: &Vec<char>) -> String {
             let mut x = String::with_capacity(1 + rest.len());
             x.push(first);
@@ -98,18 +88,21 @@ mod parsers {
 
     // rfc2812.txt:324
     pub fn params<'a>(i: &'a [u8]) -> IResult<&'a [u8], Vec<String>> {
-        map(alt((params_1, params_2)), |(mut v, x)| { v.push(x); v })(i)
+        map(alt((params_1, params_2)), |(mut v, x)| {
+            v.push(x);
+            v
+        })(i)
     }
 
     // rfc2812.txt:324
     pub fn params_1<'a>(i: &'a [u8]) -> IResult<&'a [u8], (Vec<String>, String)> {
-        fn part_1<'a>(i:&'a[u8]) -> IResult<&'a[u8], String> {
+        fn part_1<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
             let (i, _) = char(' ')(i)?;
             let (i, m) = middle(i)?;
             Ok((i, m))
         }
-        fn part_2<'a>(i:&'a[u8]) -> IResult<&'a[u8], String> {
-            let (i, s) = char(' ')(i)?;
+        fn part_2<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+            let (i, _) = char(' ')(i)?;
             let (i, _) = char(':')(i)?;
             let (i, trail) = trailing(i)?;
             Ok((i, trail))
@@ -120,7 +113,7 @@ mod parsers {
     }
 
     // rfc2812.txt:330
-    pub fn trailing<'a>(i:&'a[u8]) -> IResult<&'a[u8], String> {
+    pub fn trailing<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
         map(many0(alt((char(' '), char(':'), nospcrlfcl))), vec2string)(i)
     }
 
@@ -128,8 +121,8 @@ mod parsers {
     pub fn params_2<'a>(i: &'a [u8]) -> IResult<&'a [u8], (Vec<String>, String)> {
         let (i, _) = char(' ')(i)?;
         let (i, m) = many_m_n(14, 14, middle)(i)?;
-        fn part_2<'a>(i:&'a[u8]) -> IResult<&'a[u8], String> {
-            let (i, s) = char(' ')(i)?;
+        fn part_2<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
+            let (i, _) = char(' ')(i)?;
             let (i, _) = opt(char(':'))(i)?;
             let (i, trail) = trailing(i)?;
             Ok((i, trail))
@@ -231,7 +224,7 @@ mod parsers {
 
     pub fn nickname<'a>(i: &'a [u8]) -> IResult<&'a [u8], String> {
         let (i, first) = alt((letter, special))(i)?;
-        let (i, mut rest) = many_m_n(0, 8, alt((letter, digit, special, char('-'))))(i)?;
+        let (i, rest) = many_m_n(0, 8, alt((letter, digit, special, char('-'))))(i)?;
         Ok((i, utils::string_from_parts(first, &rest)))
     }
 
