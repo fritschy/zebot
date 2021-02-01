@@ -3,7 +3,7 @@ use nom::lib::std::fmt::Display;
 
 #[derive(Debug, PartialEq)]
 pub enum Prefix<'a> {
-    Server(&'a[u8]),
+    Server(&'a [u8]),
     Nickname(Nickname<'a>),
 }
 
@@ -18,9 +18,9 @@ impl<'a> Display for Prefix<'a> {
 
 #[derive(Debug, PartialEq)]
 pub struct Nickname<'a> {
-    nickname: &'a[u8],
-    user: Option<&'a[u8]>,
-    host: Option<&'a[u8]>,
+    nickname: &'a [u8],
+    user: Option<&'a [u8]>,
+    host: Option<&'a [u8]>,
 }
 
 impl<'a> Display for Nickname<'a> {
@@ -39,8 +39,8 @@ impl<'a> Display for Nickname<'a> {
 #[derive(Debug, PartialEq)]
 pub struct Message<'a> {
     prefix: Option<Prefix<'a>>,
-    command: &'a[u8],
-    params: Vec<&'a[u8]>,
+    command: &'a [u8],
+    params: Vec<&'a [u8]>,
 }
 
 impl<'a> Display for Message<'a> {
@@ -49,7 +49,7 @@ impl<'a> Display for Message<'a> {
             write!(f, "P:{} ", p)?;
         }
         write!(f, "C:{} ", String::from_utf8_lossy(self.command))?;
-        if ! self.params.is_empty() {
+        if !self.params.is_empty() {
             for p in &self.params {
                 write!(f, "'{}' ", String::from_utf8_lossy(p))?;
             }
@@ -60,7 +60,6 @@ impl<'a> Display for Message<'a> {
 
 pub fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
     loop {
-        // dbg!(String::from_utf8_lossy(i).to_string());
         match parsers::message(i) {
             Ok((r, msg)) => {
                 eprint!("\n[irc2/parser] {:4}", msg);
@@ -93,8 +92,8 @@ mod parsers {
                 char, crlf, none_of,
                 one_of,
             },
-            is_digit,
             is_alphabetic,
+            is_digit,
         },
         combinator::{
             map,
@@ -112,7 +111,7 @@ mod parsers {
     use super::*;
 
     // rfc2812.txt:321
-    pub fn message<'a>(i: &'a[u8]) -> IResult<&'a[u8], Message<'a>> {
+    pub fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], Message<'a>> {
         let (i, prefix) = opt(parsers::prefix)(i)?;
         let (i, command) = parsers::command(i)?;
         let (i, p) = opt(params)(i)?;
@@ -252,9 +251,9 @@ mod parsers {
         recognize(hostname_)(i)
     }
 
-    pub fn dot_prefixed<'a>(p: impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a[u8]>) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a[u8]> {
-        move |i: &'a[u8]| {
-            recognize(|i:&'a[u8]| {
+    pub fn dot_prefixed<'a>(p: impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a [u8]>) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a [u8]> {
+        move |i: &'a [u8]| {
+            recognize(|i: &'a [u8]| {
                 // XXX we need to match / too, as these are used by freenode bots/services
                 let (i, _dot) = alt((char('.'), char('/')))(i)?;
                 let (i, _rest) = p(i)?;
@@ -267,8 +266,8 @@ mod parsers {
     pub fn shortname(i: &[u8]) -> IResult<&[u8], &[u8]> {
         pub fn shortname_(i: &[u8]) -> IResult<&[u8], &[u8]> {
             let (i, _first) = alt((letter, digit))(i)?;
-            let (i, mut _rest) = take_while(|c| is_alphabetic(c) || is_digit(c) || c == b'-')(i)?; //many0(alt((letter, digit, char('-'))))(i)?;
-            let (i, mut _more) = take_while(|c| is_alphabetic(c) || is_digit(c))(i)?; //many0(alt((letter, digit)))(i)?;
+            let (i, mut _rest) = take_while(|c| is_alphabetic(c) || is_digit(c) || c == b'-')(i)?;
+            let (i, mut _more) = take_while(|c| is_alphabetic(c) || is_digit(c))(i)?;
             Ok((i, i))
         }
         recognize(shortname_)(i)
@@ -284,7 +283,7 @@ mod parsers {
 
     // rfc2812.txt:401
     pub fn user(i: &[u8]) -> IResult<&[u8], &[u8]> {
-        take_while1(|c| c != 0 && c != b'\r' && c != b'\n' && c != b' ' && c != b'@')(i)
+        take_while1(|c: u8| !(b"\0\r\n @".contains(&c)))(i)
     }
 
     // rfc2812.txt:376
@@ -293,7 +292,7 @@ mod parsers {
             let (i, _first) = alt((letter, special))(i)?;
             // XXX the RFC specifies only up to 8 additional chars, however, e.g. freenode
             //     names may be way longer ... just go all out and use many0 to capture it all
-            let (i, _rest) = take_while(|c| is_alphabetic(c) || is_digit(c) || is_special(c) || c == b'-')(i)?; //many0(alt((letter, digit, special, char('-'))))(i)?;
+            let (i, _rest) = take_while(|c| is_alphabetic(c) || is_digit(c) || is_special(c) || c == b'-')(i)?;
             Ok((i, i))
         }
         recognize(nickname_)(i)
@@ -376,7 +375,7 @@ mod tests {
         let prefix = msg.prefix.unwrap();
         assert!(format!("{}", prefix) == "freenode-connect!frigg@freenode/utility-bot/frigg");
         assert!(msg.command == b"PRIVMSG");
-        assert!(msg.params == vec![&b"ZeBot"[..], &b"\x01VERSION\x01"[..]]);
+        assert!(msg.params == [&b"ZeBot"[..], &b"\x01VERSION\x01"[..]]);
     }
 
     #[test]
