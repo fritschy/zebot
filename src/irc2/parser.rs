@@ -1,62 +1,6 @@
 use nom::IResult;
-use nom::lib::std::fmt::Display;
 
-#[derive(Debug, PartialEq)]
-pub enum Prefix<'a> {
-    Server(&'a [u8]),
-    Nickname(Nickname<'a>),
-}
-
-impl<'a> Display for Prefix<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
-        match self {
-            Prefix::Server(s) => write!(f, "{}", String::from_utf8_lossy(s)),
-            Prefix::Nickname(n) => write!(f, "{}", n),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Nickname<'a> {
-    nickname: &'a [u8],
-    user: Option<&'a [u8]>,
-    host: Option<&'a [u8]>,
-}
-
-impl<'a> Display for Nickname<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", String::from_utf8_lossy(self.nickname))?;
-        if let Some(host) = &self.host {
-            if let Some(user) = &self.user {
-                write!(f, "!{}", String::from_utf8_lossy(user))?;
-            }
-            write!(f, "@{}", String::from_utf8_lossy(host))?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub struct Message<'a> {
-    prefix: Option<Prefix<'a>>,
-    command: &'a [u8],
-    params: Vec<&'a [u8]>,
-}
-
-impl<'a> Display for Message<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
-        if let Some(p) = &self.prefix {
-            write!(f, "P:{} ", p)?;
-        }
-        write!(f, "C:{} ", String::from_utf8_lossy(self.command))?;
-        if !self.params.is_empty() {
-            for p in &self.params {
-                write!(f, "'{}' ", String::from_utf8_lossy(p))?;
-            }
-        }
-        Ok(())
-    }
-}
+use crate::irc2::*;
 
 pub fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
     loop {
@@ -173,7 +117,7 @@ mod parsers {
         let (i, _) = char(':')(i)?;
         let (i, servnick) = alt((servername, nickname_part))(i)?;
         // Note: the trailing SPACE needed to be pulled into the subparsers in order to
-        //       differentiate the different parts.
+        //       differentiate the parts.
         Ok((i, servnick))
     }
 
