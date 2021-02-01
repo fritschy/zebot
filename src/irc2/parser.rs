@@ -36,12 +36,34 @@ impl<'a> Display for Nickname<'a> {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct Message<'a> {
+    prefix: Option<Prefix<'a>>,
+    command: &'a[u8],
+    params: Vec<&'a[u8]>,
+}
+
+impl<'a> Display for Message<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        if let Some(p) = &self.prefix {
+            write!(f, "P:{} ", p)?;
+        }
+        write!(f, "C:{} ", String::from_utf8_lossy(self.command))?;
+        if ! self.params.is_empty() {
+            for p in &self.params {
+                write!(f, "'{}' ", String::from_utf8_lossy(p))?;
+            }
+        }
+        Ok(())
+    }
+}
+
 pub fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
     loop {
-        dbg!(String::from_utf8_lossy(i).to_string());
+        // dbg!(String::from_utf8_lossy(i).to_string());
         match parsers::message(i) {
             Ok((r, msg)) => {
-                dbg!(msg);
+                eprint!("\n[irc2/parser] {:4}", msg);
                 i = r;
                 if i.len() == 0 {
                     break;
@@ -63,6 +85,7 @@ mod parsers {
         bytes::complete::{
             take_until,
             take_while,
+            take_while1,
             take_while_m_n,
         },
         character::{
@@ -71,10 +94,12 @@ mod parsers {
                 one_of,
             },
             is_digit,
+            is_alphabetic,
         },
         combinator::{
             map,
             opt,
+            recognize,
         },
         IResult,
         multi::{
@@ -85,17 +110,14 @@ mod parsers {
     };
 
     use super::*;
-    use nom::combinator::recognize;
-    use nom::bytes::complete::take_while1;
-    use nom::character::is_alphabetic;
 
     // rfc2812.txt:321
-    pub fn message(i: &[u8]) -> IResult<&[u8], (Option<Prefix>, &[u8], Vec<&[u8]>)> {
+    pub fn message<'a>(i: &'a[u8]) -> IResult<&'a[u8], Message<'a>> {
         let (i, prefix) = opt(parsers::prefix)(i)?;
         let (i, command) = parsers::command(i)?;
         let (i, p) = opt(params)(i)?;
         let (i, _) = crlf(i)?;
-        Ok((i, (prefix, command, p.unwrap_or_else(|| Vec::new()))))
+        Ok((i, Message { prefix, command, params: p.unwrap_or_else(|| Vec::new()) }))
     }
 
     // rfc2812.txt:329
@@ -189,12 +211,13 @@ mod parsers {
     // rfc2812.txt:373
     pub fn ip4addr(i: &[u8]) -> IResult<&[u8], &[u8]> {
         pub fn ip(i: &[u8]) -> IResult<&[u8], u8> {
-            let (i, _) = be_u8(i)?;
+            let (i, _) = take_while_m_n(1, 3, is_digit)(i)?;
             let (i, _) = char('.')(i)?;
-            let (i, _) = be_u8(i)?;
+            let (i, _) = take_while_m_n(1, 3, is_digit)(i)?;
             let (i, _) = char('.')(i)?;
-            let (i, _) = be_u8(i)?;
+            let (i, _) = take_while_m_n(1, 3, is_digit)(i)?;
             let (i, _) = char('.')(i)?;
+            let (i, _) = take_while_m_n(1, 3, is_digit)(i)?;
             be_u8(i)
         }
         recognize(ip)(i)
@@ -222,7 +245,7 @@ mod parsers {
         pub fn hostname_(i: &[u8]) -> IResult<&[u8], &[u8]> {
             let (i, _first) = shortname(i)?;
             let (i, _dot) = many0(dot_prefixed(shortname))(i)?;
-            // XXX freenode services have a . at the end of ther host
+            // XXX freenode services have a . at the end of their host
             let (i, _dot2) = opt(char('.'))(i)?;
             Ok((i, i))
         }
@@ -310,12 +333,12 @@ mod tests {
         let r = r.unwrap();
 
         let msg = r.1;
-        assert!(msg.0.is_some());
+        assert!(msg.prefix.is_some());
 
-        let prefix = msg.0.unwrap();
+        let prefix = msg.prefix.unwrap();
         assert!(format!("{}", prefix) == "fritschy!~fritschy@localhost");
-        assert!(msg.1 == b"PRIVMSG");
-        assert!(msg.2 == [&b"#zebot-test"[..], &b"moep"[..]]);
+        assert!(msg.command == b"PRIVMSG");
+        assert!(msg.params == [&b"#zebot-test"[..], &b"moep"[..]]);
     }
 
     #[test]
@@ -329,12 +352,12 @@ mod tests {
         let r = r.unwrap();
 
         let msg = r.1;
-        assert!(msg.0.is_some());
+        assert!(msg.prefix.is_some());
 
-        let prefix = msg.0.unwrap();
+        let prefix = msg.prefix.unwrap();
         assert!(format!("{}", prefix) == "NickServ!NickServ@services.");
-        assert!(msg.1 == b"NOTICE");
-        assert!(msg.2 == [&b"ZeBot"[..], &b"This nickname is registered. Please choose a different nickname, or identify via \x02/msg NickServ identify <password>\x02."[..]]);
+        assert!(msg.command == b"NOTICE");
+        assert!(msg.params == [&b"ZeBot"[..], &b"This nickname is registered. Please choose a different nickname, or identify via \x02/msg NickServ identify <password>\x02."[..]]);
     }
 
     #[test]
@@ -348,12 +371,12 @@ mod tests {
         let r = r.unwrap();
 
         let msg = r.1;
-        assert!(msg.0.is_some());
+        assert!(msg.prefix.is_some());
 
-        let prefix = msg.0.unwrap();
+        let prefix = msg.prefix.unwrap();
         assert!(format!("{}", prefix) == "freenode-connect!frigg@freenode/utility-bot/frigg");
-        assert!(msg.1 == b"PRIVMSG");
-        assert!(msg.2 == vec![&b"ZeBot"[..], &b"\x01VERSION\x01"[..]]);
+        assert!(msg.command == b"PRIVMSG");
+        assert!(msg.params == vec![&b"ZeBot"[..], &b"\x01VERSION\x01"[..]]);
     }
 
     #[test]
