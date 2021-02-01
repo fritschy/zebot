@@ -14,5 +14,7 @@ try:
     with open("nag-{}.txt".format(dst[0]), "rt") as f:
         lines = list(map(str.strip, f.readlines()))
         handler_exit(0, lines=["Hey {}, {}".format(dst[0], random.choice(lines))])
+except FileNotFoundError:
+    handler_exit(0, lines=["Hey {}".format(dst[0])])
 except:
-    pass #handler_exit(0, lines=["Hey {}"])
+    pass
