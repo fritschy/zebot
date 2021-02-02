@@ -1,0 +1,19 @@
+[package]
+name = "irc2"
+version = "0.1.0"
+authors = ["Marcus Borkenhagen <m@fritschy.de>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nom = { version = "6.1", features = ["lexical"] }
+
+[profile.release]
+#debug = true
+lto = true
+codegen-units = 1
+
+[profile.test]
+debug = true
+opt-level = 0
