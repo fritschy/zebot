@@ -4,7 +4,8 @@ use std::fmt::{Display, Formatter};
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub enum CommandCode {
     Numeric(u32),
-    Generic(String),  // Yeah ...
+    Generic(String),
+    // Yeah ...
     PrivMsg,
     Notice,
     Nick,
@@ -38,7 +39,7 @@ impl<'a> From<Cow<'a, str>> for CommandCode {
                 _ => {
                     eprintln!("WARNING: Fallback to generic CommandCode for {}", c);
                     CommandCode::Generic(c.to_string())
-                },
+                }
             }
         }
     }

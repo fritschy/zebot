@@ -1,6 +1,6 @@
-mod parser;
-
 use nom::lib::std::fmt::Display;
+
+mod parser;
 
 #[derive(Debug, PartialEq)]
 pub enum Prefix<'a> {

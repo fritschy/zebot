@@ -1,27 +1,27 @@
+use std::borrow::Cow;
+use std::fmt::{Display, Formatter};
+
 use nom::{
-    IResult,
+    branch::alt,
     bytes::complete::{
         tag,
         take_until,
         take_while,
         take_while_m_n,
     },
-    multi::many_till,
     character::{
         is_alphabetic,
         is_digit,
     },
-    error::Error,
     combinator::{
-        opt,
-        map,
         eof,
+        map,
+        opt,
     },
-    branch::alt
+    error::Error,
+    IResult,
+    multi::many_till,
 };
-
-use std::fmt::{Display, Formatter};
-use std::borrow::Cow;
 
 use crate::irc::*;
 

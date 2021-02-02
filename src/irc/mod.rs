@@ -1,23 +1,25 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::io::{Read, Stdout, Write};
+use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 
-mod message;
-pub(crate) use message::*;
-
-mod util;
-pub(crate) use util::*;
-
-mod command;
-pub(crate) use command::*;
-
-mod handler;
-pub use handler::*;
 use irc2;
-use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
+
+pub(crate) use command::*;
+pub use handler::*;
+pub(crate) use message::*;
+pub(crate) use util::*;
+
+mod message;
+
+mod util;
+
+mod command;
+
+mod handler;
 
 pub struct User {
     pub nick: String,

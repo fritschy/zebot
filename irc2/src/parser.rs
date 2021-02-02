@@ -31,9 +31,9 @@ mod parsers {
             is_alphabetic, is_digit,
         },
         combinator::{map, opt, recognize},
+        IResult,
         multi::{many0, many_m_n},
         number::complete::be_u8,
-        IResult,
     };
 
     use super::*;

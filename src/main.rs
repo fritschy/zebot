@@ -1,21 +1,21 @@
-mod irc;
-use irc::*;
-
-use std::net::ToSocketAddrs;
-
-use futures_util::future::FutureExt;
-use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-use json::JsonValue;
-use rand::prelude::IteratorRandom;
-use rand::{thread_rng, Rng};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::{BufRead, BufReader};
+use std::net::ToSocketAddrs;
 use std::path::Path;
+use std::time::Duration;
+
+use futures_util::future::FutureExt;
+use json::JsonValue;
+use rand::{Rng, thread_rng};
+use rand::prelude::IteratorRandom;
 use stopwatch::Stopwatch;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+use irc::*;
+
+mod irc;
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args
@@ -112,7 +112,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 
             Ok(())
         }
-        .fuse();
+            .fuse();
 
         let a = context.update().fuse();
 
@@ -121,7 +121,8 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
         tokio::select! {
             _ = a => (),
             _ = b => (),
-        };
+        }
+        ;
 
         // context.update().or(b).await?;
     }
@@ -198,9 +199,9 @@ fn nag_user(nick: &str) -> String {
 }
 
 fn text_box<T: Display, S: Display>(
-    mut lines: impl Iterator<Item = T>,
+    mut lines: impl Iterator<Item=T>,
     header: Option<S>,
-) -> impl Iterator<Item = String> {
+) -> impl Iterator<Item=String> {
     let mut state = 0;
     std::iter::from_fn(move || match state {
         0 => {
