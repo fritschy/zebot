@@ -39,7 +39,7 @@ mod parsers {
     use super::*;
 
     // rfc2812.txt:321
-    pub fn message<'a>(i: &'a [u8]) -> IResult<&'a [u8], Message<'a>> {
+    pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
         let (i, prefix) = opt(parsers::prefix)(i)?;
         let (i, command) = parsers::command(i)?;
         let (i, p) = opt(params)(i)?;
@@ -266,8 +266,7 @@ mod parsers {
 mod tests {
     #[test]
     fn privmsg() {
-        let i = b":fritschy!~fritschy@localhost PRIVMSG #zebot-test :moep\r\n";
-        let i = &i[..];
+        let i = &b":fritschy!~fritschy@localhost PRIVMSG #zebot-test :moep\r\n"[..];
 
         let r = super::parsers::message(i);
 
@@ -285,8 +284,7 @@ mod tests {
 
     #[test]
     fn freenode_nickserv() {
-        let i = b":NickServ!NickServ@services. NOTICE ZeBot :This nickname is registered. Please choose a different nickname, or identify via \x02/msg NickServ identify <password>\x02.\r\n";
-        let i = &i[..];
+        let i = &b":NickServ!NickServ@services. NOTICE ZeBot :This nickname is registered. Please choose a different nickname, or identify via \x02/msg NickServ identify <password>\x02.\r\n"[..];
 
         let r = super::parsers::message(i);
 
@@ -304,8 +302,7 @@ mod tests {
 
     #[test]
     fn freenode_bot_frigg() {
-        let i = b":freenode-connect!frigg@freenode/utility-bot/frigg PRIVMSG ZeBot :\x01VERSION\x01\r\n";
-        let i = &i[..];
+        let i = &b":freenode-connect!frigg@freenode/utility-bot/frigg PRIVMSG ZeBot :\x01VERSION\x01\r\n"[..];
 
         let r = super::parsers::message(i);
 
@@ -323,8 +320,7 @@ mod tests {
 
     #[test]
     fn freenode_motd_and_stuff() {
-        let i = b":weber.freenode.net 372 ZeBot :- #freenode and using the \'/who freenode/staff/*\' command. You may message\r\n:weber.freenode.net 372 ZeBot :- any of us at any time. Please note that freenode predominantly provides \r\n:weber.freenode.net 372 ZeBot :- assistance via private message, and while we have a network channel the \r\n:weber.freenode.net 372 ZeBot :- primary venue for support requests is via private message to a member \r\n:weber.freenode.net 372 ZeBot :- of the volunteer staff team.\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- From time to time, volunteer staff may send server-wide notices relating to\r\n:weber.freenode.net 372 ZeBot :- the project, or the communities that we host. The majority of such notices\r\n:weber.freenode.net 372 ZeBot :- will be sent as wallops, and you can \'/mode <yournick> +w\' to ensure that you\r\n:weber.freenode.net 372 ZeBot :- do not miss them. Important messages relating to the freenode project, including\r\n:weber.freenode.net 372 ZeBot :- notices of upcoming maintenance and other scheduled downtime will be issued as\r\n:weber.freenode.net 372 ZeBot :- global notices.\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- Representing an on-topic project? Don\'t forget to register, more information\r\n:weber.freenode.net 372 ZeBot :- can be found on the https://freenode.net website under \"Group Registration\".\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- Thank you also to our server sponsors for the sustained support in keeping the\r\n:weber.freenode.net 372 ZeBot :- network going for close to two decades.\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- Thank you for using freenode!\r\n:weber.freenode.net 376 ZeBot :End of /MOTD command.\r\n:ZeBot MODE ZeBot :+i\r\n:NickServ!NickServ@services. NOTICE ZeBot :This nickname is registered. Please choose a different nickname, or identify via \x02/msg NickServ identify <password>\x02.\r\n";
-        let mut i = &i[..];
+        let mut i = &b":weber.freenode.net 372 ZeBot :- #freenode and using the \'/who freenode/staff/*\' command. You may message\r\n:weber.freenode.net 372 ZeBot :- any of us at any time. Please note that freenode predominantly provides \r\n:weber.freenode.net 372 ZeBot :- assistance via private message, and while we have a network channel the \r\n:weber.freenode.net 372 ZeBot :- primary venue for support requests is via private message to a member \r\n:weber.freenode.net 372 ZeBot :- of the volunteer staff team.\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- From time to time, volunteer staff may send server-wide notices relating to\r\n:weber.freenode.net 372 ZeBot :- the project, or the communities that we host. The majority of such notices\r\n:weber.freenode.net 372 ZeBot :- will be sent as wallops, and you can \'/mode <yournick> +w\' to ensure that you\r\n:weber.freenode.net 372 ZeBot :- do not miss them. Important messages relating to the freenode project, including\r\n:weber.freenode.net 372 ZeBot :- notices of upcoming maintenance and other scheduled downtime will be issued as\r\n:weber.freenode.net 372 ZeBot :- global notices.\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- Representing an on-topic project? Don\'t forget to register, more information\r\n:weber.freenode.net 372 ZeBot :- can be found on the https://freenode.net website under \"Group Registration\".\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- Thank you also to our server sponsors for the sustained support in keeping the\r\n:weber.freenode.net 372 ZeBot :- network going for close to two decades.\r\n:weber.freenode.net 372 ZeBot :-  \r\n:weber.freenode.net 372 ZeBot :- Thank you for using freenode!\r\n:weber.freenode.net 376 ZeBot :End of /MOTD command.\r\n:ZeBot MODE ZeBot :+i\r\n:NickServ!NickServ@services. NOTICE ZeBot :This nickname is registered. Please choose a different nickname, or identify via \x02/msg NickServ identify <password>\x02.\r\n"[..];
 
         let nmsg = i.split(|&x| x == b'\r').count() - 1;
 
