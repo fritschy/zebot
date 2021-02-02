@@ -16,6 +16,7 @@ json = "0.12"
 stopwatch = "0.0.7"
 textwrap = "0.13"
 regex = "1"
+irc2 = { path = "irc2/" }
 
 [profile.release]
 #debug = true

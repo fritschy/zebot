@@ -1,4 +1,5 @@
 mod parser;
+
 use nom::lib::std::fmt::Display;
 
 #[derive(Debug, PartialEq)]
@@ -60,6 +61,6 @@ impl<'a> Display for Message<'a> {
     }
 }
 
-pub fn parse_ng<'a>(i:&'a[u8]) {
+pub fn parse_ng<'a>(i: &'a [u8]) {
     parser::parse(i);
 }

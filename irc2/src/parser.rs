@@ -1,6 +1,6 @@
 use nom::IResult;
 
-use crate::irc2::*;
+use crate::*;
 
 pub fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
     loop {
@@ -25,31 +25,15 @@ pub fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
 mod parsers {
     use nom::{
         branch::alt,
-        bytes::complete::{
-            take_until,
-            take_while,
-            take_while1,
-            take_while_m_n,
-        },
+        bytes::complete::{take_until, take_while, take_while1, take_while_m_n},
         character::{
-            complete::{
-                char, crlf, none_of,
-                one_of,
-            },
-            is_alphabetic,
-            is_digit,
+            complete::{char, crlf, none_of, one_of},
+            is_alphabetic, is_digit,
         },
-        combinator::{
-            map,
-            opt,
-            recognize,
-        },
-        IResult,
-        multi::{
-            many0,
-            many_m_n,
-        },
+        combinator::{map, opt, recognize},
+        multi::{many0, many_m_n},
         number::complete::be_u8,
+        IResult,
     };
 
     use super::*;
@@ -60,7 +44,14 @@ mod parsers {
         let (i, command) = parsers::command(i)?;
         let (i, p) = opt(params)(i)?;
         let (i, _) = crlf(i)?;
-        Ok((i, Message { prefix, command, params: p.unwrap_or_else(|| Vec::new()) }))
+        Ok((
+            i,
+            Message {
+                prefix,
+                command,
+                params: p.unwrap_or_else(|| Vec::new()),
+            },
+        ))
     }
 
     // rfc2812.txt:329
@@ -137,11 +128,18 @@ mod parsers {
         }
         let (i, rest) = opt(at_host)(i)?;
         let (i, _) = char(' ')(i)?;
-        Ok((i, Prefix::Nickname(Nickname {
-            nickname: nick,
-            host: if let Some((_, u)) = &rest { Some(u.clone()) } else { None },
-            user: if let Some((u, _)) = rest { u } else { None },
-        })))
+        Ok((
+            i,
+            Prefix::Nickname(Nickname {
+                nickname: nick,
+                host: if let Some((_, u)) = &rest {
+                    Some(u.clone())
+                } else {
+                    None
+                },
+                user: if let Some((u, _)) = rest { u } else { None },
+            }),
+        ))
     }
 
     // rfc2812.txt:366
@@ -195,7 +193,9 @@ mod parsers {
         recognize(hostname_)(i)
     }
 
-    pub fn dot_prefixed<'a>(p: impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a [u8]>) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a [u8]> {
+    pub fn dot_prefixed<'a>(
+        p: impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a [u8]>,
+    ) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a [u8]> {
         move |i: &'a [u8]| {
             recognize(|i: &'a [u8]| {
                 // XXX we need to match / too, as these are used by freenode bots/services
@@ -219,9 +219,7 @@ mod parsers {
 
     // rfc2812.txt:323
     pub fn command(i: &[u8]) -> IResult<&[u8], &[u8]> {
-        let (i, cmd) = alt((
-            take_while_m_n(3, 3, is_digit),
-            take_until(" ")))(i)?;
+        let (i, cmd) = alt((take_while_m_n(3, 3, is_digit), take_until(" ")))(i)?;
         Ok((i, cmd))
     }
 
@@ -236,7 +234,8 @@ mod parsers {
             let (i, _first) = alt((letter, special))(i)?;
             // XXX the RFC specifies only up to 8 additional chars, however, e.g. freenode
             //     names may be way longer ... just go all out and use many0 to capture it all
-            let (i, _rest) = take_while(|c| is_alphabetic(c) || is_digit(c) || is_special(c) || c == b'-')(i)?;
+            let (i, _rest) =
+                take_while(|c| is_alphabetic(c) || is_digit(c) || is_special(c) || c == b'-')(i)?;
             Ok((i, i))
         }
         recognize(nickname_)(i)

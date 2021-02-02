@@ -14,10 +14,10 @@ pub(crate) use command::*;
 
 mod handler;
 pub use handler::*;
+use irc2;
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use crate::irc2;
 
 pub struct User {
     pub nick: String,

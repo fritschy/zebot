@@ -1,8 +1,6 @@
 mod irc;
 use irc::*;
 
-mod irc2;
-
 use std::net::ToSocketAddrs;
 
 use futures_util::future::FutureExt;
@@ -12,12 +10,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use json::JsonValue;
 use rand::prelude::IteratorRandom;
 use rand::{thread_rng, Rng};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
 use stopwatch::Stopwatch;
-use std::collections::HashMap;
-use std::cell::RefCell;
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args
@@ -243,7 +241,7 @@ impl SubstituteLastHandler {
 }
 
 fn parse_substitution(re: &str) -> Option<(String, String, String)> {
-    let mut s = 0;  // state, see below, can only increment
+    let mut s = 0; // state, see below, can only increment
     let mut sep = '\0';
     let mut pat = String::with_capacity(re.len());
     let mut subst = String::with_capacity(re.len());
@@ -279,17 +277,15 @@ fn parse_substitution(re: &str) -> Option<(String, String, String)> {
                 }
             }
 
-            4 => {
-                match c {
-                    'g' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 's' => {
-                        flags.push(c);
-                    }
-                    _ => {
-                        eprintln!("Invalid flags");
-                        return None;
-                    }
+            4 => match c {
+                'g' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 's' => {
+                    flags.push(c);
                 }
-            }
+                _ => {
+                    eprintln!("Invalid flags");
+                    return None;
+                }
+            },
 
             _ => {
                 eprintln!("Invalid state parsing re");
@@ -316,7 +312,9 @@ impl MessageHandler for SubstituteLastHandler {
                 eprintln!("Ignoring ACTION message");
                 return Ok(HandlerResult::NotInterested);
             }
-            self.last_msg.borrow_mut().insert((dst.clone(), nick.clone()), msg.params[1].to_string());
+            self.last_msg
+                .borrow_mut()
+                .insert((dst.clone(), nick.clone()), msg.params[1].to_string());
             eprintln!("{} new last message '{}'", nick, msg.params[1].to_string());
             return Ok(HandlerResult::NotInterested);
         }
