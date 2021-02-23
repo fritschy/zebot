@@ -227,6 +227,10 @@ impl Context {
     }
 
     pub async fn update(&self) -> Result<(), std::io::Error> {
+        if self.shutdown.get() {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, std::io::Error::from(std::io::ErrorKind::Other)));
+        }
+
         // Join channels we want to join...
         if !self.channels.borrow().is_empty() {
             let joins = self

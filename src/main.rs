@@ -59,6 +59,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
             let prompt = format!("{}> ", current_channel);
             stdout.write_all(prompt.as_bytes()).await?;
             stdout.flush().await?;
+
             let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
 
             if bytes == 0 {
