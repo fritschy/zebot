@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::net::ToSocketAddrs;
 use std::path::Path;
 use std::time::Duration;
@@ -14,6 +14,7 @@ use stopwatch::Stopwatch;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use irc::*;
+use url::Url;
 
 mod irc;
 
@@ -50,6 +51,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     context.register_handler(CommandCode::PrivMsg, Box::new(ZeBotAnswerHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(SubstituteLastHandler::new()));
+    context.register_handler(CommandCode::PrivMsg, Box::new(URLCollector::new()));
 
     context.logon();
 
@@ -228,6 +230,62 @@ fn text_box<T: Display, S: Display>(
 
 fn is_json_flag_set(jv: &JsonValue) -> bool {
     jv.as_bool().unwrap_or_else(|| false.into()) || jv.as_number().unwrap_or_else(|| 0.into()) != 0
+}
+
+struct URLCollector {
+    filename: String,
+}
+
+impl URLCollector {
+    fn new() -> Self {
+        URLCollector {
+            filename: "rw_data/urls.txt".to_string(),
+        }
+    }
+
+    fn add_url(&self, nick: &str, chan: &str, url: &str) -> tokio::io::Result<()> {
+        let mut f = std::fs::OpenOptions::new()
+            .truncate(false)
+            .create(true)
+            .write(true)
+            .read(false)
+            .append(true)
+            .open(&self.filename)?;
+
+        let line = format!("{}\t{}\t{}\t{}\n", chrono::prelude::Local::now().to_rfc3339(), chan, nick, url);
+
+        f.write_all(line.as_bytes())
+    }
+}
+
+impl MessageHandler for URLCollector {
+    fn handle<'a>(
+        &self,
+        ctx: &Context,
+        msg: &Message<'a>,
+    ) -> Result<HandlerResult, std::io::Error> {
+        let text = &msg.params[1];
+
+        for word in text.split(" ") {
+            match Url::parse(word) {
+                Ok(url) => {
+                    match url.scheme() {
+                        "http" | "https" | "ftp" => {
+                            let nick = msg.get_nick();
+                            let chan = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                            eprintln!("Got an url from {} {}: {}", &chan, &nick, url.as_ref());
+                            self.add_url(&nick, &chan, url.as_ref())?;
+                        }
+                        _ => (),
+                    }
+                }
+
+                Err(_) => (),
+            }
+        }
+
+        Ok(HandlerResult::NotInterested)
+    }
 }
 
 struct SubstituteLastHandler {

@@ -17,6 +17,8 @@ stopwatch = "0.0.7"
 textwrap = "0.13"
 regex = "1"
 irc2 = { path = "irc2/" }
+url = "2.2"
+chrono = "0.4"
 
 [profile.release]
 #debug = true
