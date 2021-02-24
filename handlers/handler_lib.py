@@ -51,4 +51,4 @@ def get_from():
 
 def get_to():
     """get the message destination, e.g. where the message was sent to, e.g. a channel or you privately"""
-    return sys.argv[1]
+    return sys.argv[2]
