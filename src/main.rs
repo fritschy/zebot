@@ -12,9 +12,9 @@ use rand::{Rng, thread_rng};
 use rand::prelude::IteratorRandom;
 use stopwatch::Stopwatch;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use url::Url;
 
 use irc::*;
-use url::Url;
 
 mod irc;
 
@@ -702,10 +702,12 @@ impl MessageHandler for GreetHandler {
         ctx: &Context,
         msg: &Message<'a>,
     ) -> Result<HandlerResult, std::io::Error> {
-        if let CommandCode::Join = msg.command {
-            ctx.message(&msg.get_reponse_destination(&ctx.joined_channels.borrow()),
-                &greet(&msg.get_nick())
-            );
+        if *ctx.nick() != msg.get_nick() {
+            if let CommandCode::Join = msg.command {
+                ctx.message(&msg.get_reponse_destination(&ctx.joined_channels.borrow()),
+                            &greet(&msg.get_nick()),
+                );
+            }
         }
 
         Ok(HandlerResult::NotInterested)
