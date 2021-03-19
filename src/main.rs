@@ -48,6 +48,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
         .unwrap();
 
     context.register_handler(CommandCode::PrivMsg, Box::new(Callouthandler));
+    context.register_handler(CommandCode::Join, Box::new(GreetHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ZeBotAnswerHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(SubstituteLastHandler::new()));
@@ -629,11 +630,11 @@ impl MessageHandler for ZeBotAnswerHandler {
 struct MiscCommandsHandler;
 
 impl MessageHandler for MiscCommandsHandler {
-    fn handle<'a>(
-        &self,
-        ctx: &Context,
-        msg: &Message<'a>,
-    ) -> Result<HandlerResult, std::io::Error> {
+fn handle<'a>(
+    &self,
+    ctx: &Context,
+    msg: &Message<'a>,
+) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() < 2 {
             return Ok(HandlerResult::NotInterested);
         }
@@ -670,5 +671,43 @@ impl MessageHandler for MiscCommandsHandler {
         }
 
         Ok(HandlerResult::Handled)
+    }
+}
+
+struct GreetHandler;
+
+fn greet(nick: &str) -> String {
+    const PATS: &[&str] = &[
+        "Hey {}!",
+        "Moin {}, o/",
+        "Moin {}, \\o",
+        "Moin {}, \\o/",
+        "Moin {}, _o/",
+        "Moin {}, \\o_",
+        "Moin {}, o_/",
+        "OI!, Ein {}!",
+        "{}, n'Moin!",
+    ];
+
+    if let Some(s) = PATS.iter().choose(&mut thread_rng()) {
+        return s.to_string().replace("{}", nick);
+    }
+
+    String::from("Hey ") + nick
+}
+
+impl MessageHandler for GreetHandler {
+    fn handle<'a>(
+        &self,
+        ctx: &Context,
+        msg: &Message<'a>,
+    ) -> Result<HandlerResult, std::io::Error> {
+        if let CommandCode::Join = msg.command {
+            ctx.message(&msg.get_reponse_destination(&ctx.joined_channels.borrow()),
+                &greet(&msg.get_nick())
+            );
+        }
+
+        Ok(HandlerResult::NotInterested)
     }
 }
