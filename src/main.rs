@@ -123,8 +123,8 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
         tokio::pin!(a, b);
 
         tokio::select! {
-            Ok(x) = a => (),
-            Ok(x) = b => (),
+            Ok(_) = a => (),
+            Ok(_) = b => (),
             else => break,
         }
         ;
