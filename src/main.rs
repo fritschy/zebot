@@ -33,8 +33,8 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 
     let nick = args.value_of("nick").unwrap();
     let user = args.value_of("user").unwrap();
-    let pass = args.value_of("pass");
-    let mut context = Context::connect(addr, User::new(nick, user, pass)).await?;
+    let pass = args.value_of("pass-file").map(|x| String::from(x));
+    let mut context = Context::connect(addr, User::new(nick, user), pass).await?;
 
     for i in args.value_of("channel").unwrap().split(|x| x == ',') {
         context.join(i);
@@ -158,7 +158,10 @@ async fn main() -> std::io::Result<()> {
                 .short("u")
                 .long("user"),
         )
-        .arg(clap::Arg::with_name("pass").short("p").long("pass"))
+        .arg(clap::Arg::with_name("pass-file")
+            .default_value("password.txt")
+            .short("p")
+            .long("pass"))
         .arg(
             clap::Arg::with_name("channel")
                 .default_value("#zebot-test")
@@ -686,7 +689,7 @@ fn greet(nick: &str) -> String {
         "Moin {}, _o/",
         "Moin {}, \\o_",
         "Moin {}, o_/",
-        "OI!, Ein {}!",
+        "OI! Ein {}!",
         "{}, n'Moin!",
     ];
 

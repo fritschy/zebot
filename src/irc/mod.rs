@@ -24,15 +24,13 @@ mod handler;
 pub struct User {
     pub nick: String,
     pub user: String,
-    pub pass: Option<String>,
 }
 
 impl User {
-    pub fn new(nick: &str, user: &str, pass: Option<&str>) -> Self {
+    pub fn new(nick: &str, user: &str) -> Self {
         User {
             nick: nick.to_string(),
             user: user.to_string(),
-            pass: pass.map(|x| x.to_string()),
         }
     }
 }
@@ -92,10 +90,11 @@ pub struct Context {
     messages: RefCell<Vec<String>>,
     shutdown: Cell<bool>,
     last_flush: Cell<Instant>,
+    password_file: String,
 }
 
 impl Context {
-    pub async fn connect(addr: SocketAddr, user: User) -> Result<Self, std::io::Error> {
+    pub async fn connect(addr: SocketAddr, user: User, password_file: Option<String>) -> Result<Self, std::io::Error> {
         let c = TcpStream::connect(addr).await?;
         c.set_nodelay(true)?;
 
@@ -118,6 +117,7 @@ impl Context {
             handlers,
             user,
             last_flush: Cell::new(Instant::now()),
+            password_file: password_file.unwrap_or_else(|| String::from("password.txt")),
         })
     }
 
@@ -153,13 +153,13 @@ impl Context {
 
         self.send(msg);
 
-        if let Err(e) = std::fs::File::open("password.txt").and_then(|mut f| {
+        if let Err(e) = std::fs::File::open(&self.password_file).and_then(|mut f| {
             let mut pw = String::new();
             f.read_to_string(&mut pw)?;
             self.message("NickServ", &format!("identify {}", pw.trim()));
             Ok(())
         }) {
-            eprintln!("Could not open password.txt: {:?}", e);
+            eprintln!("Could not open password file {}: {:?}", &self.password_file, e);
         }
     }
 
