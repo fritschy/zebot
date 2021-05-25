@@ -1,4 +1,5 @@
 use nom::IResult;
+use chrono::prelude::*;
 
 use crate::*;
 
@@ -6,7 +7,7 @@ pub(crate) fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
     loop {
         match parsers::message(i) {
             Ok((r, msg)) => {
-                eprint!("\n[irc2/parser] {:4}", msg);
+                eprint!("\n[{}] [irc2/parser] {:4}", Local::now().to_rfc3339(), msg);
                 i = r;
                 if i.len() == 0 {
                     break;

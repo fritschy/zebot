@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 nom = { version = "6.1", features = ["lexical"] }
+chrono = "0.4"
 
 [profile.release]
 #debug = true

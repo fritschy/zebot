@@ -62,5 +62,7 @@ impl<'a> Display for Message<'a> {
 }
 
 pub fn parse_ng<'a>(i: &'a [u8]) {
-    parser::parse(i);
+    if let Err(x) = parser::parse(i) {
+        eprintln!("Error from irc2::parse_ng: {:?}", x);
+    }
 }
