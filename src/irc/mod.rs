@@ -169,12 +169,16 @@ impl Context {
 
     pub fn quit(&self) {
         self.shutdown.replace(true);
-        self.messages.borrow_mut().clear();
+        futures::executor::block_on(async {
+            self.messages.borrow_mut().clear();
+        });
         self.send("QUIT :Need to restart the Kubernetes VM\r\n".to_string());
     }
 
     pub fn send(&self, msg: String) {
-        self.messages.borrow_mut().push(msg);
+        futures::executor::block_on(async {
+            self.messages.borrow_mut().push(msg);
+        });
     }
 
     pub fn message(&self, dst: &str, msg: &str) {
