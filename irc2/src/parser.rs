@@ -2,7 +2,7 @@ use nom::IResult;
 
 use crate::*;
 
-pub fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
+pub(crate) fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
     loop {
         match parsers::message(i) {
             Ok((r, msg)) => {
@@ -39,7 +39,7 @@ mod parsers {
     use super::*;
 
     // rfc2812.txt:321
-    pub fn message(i: &[u8]) -> IResult<&[u8], Message> {
+    pub(crate) fn message(i: &[u8]) -> IResult<&[u8], Message> {
         let (i, prefix) = opt(parsers::prefix)(i)?;
         let (i, command) = parsers::command(i)?;
         let (i, p) = opt(params)(i)?;
@@ -55,7 +55,7 @@ mod parsers {
     }
 
     // rfc2812.txt:329
-    pub fn middle(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    fn middle(i: &[u8]) -> IResult<&[u8], &[u8]> {
         pub fn middle_(i: &[u8]) -> IResult<&[u8], &[u8]> {
             let (i, _first) = nospcrlfcl(i)?;
             take_while(|c| c == b':' || is_nospcrlfcl(c))(i)
@@ -64,7 +64,7 @@ mod parsers {
     }
 
     // rfc2812.txt:324
-    pub fn params(i: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
+    fn params(i: &[u8]) -> IResult<&[u8], Vec<&[u8]>> {
         // rfc2812.txt:324
         pub fn params_(i: &[u8]) -> IResult<&[u8], (Vec<&[u8]>, &[u8])> {
             fn part_1(i: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -90,30 +90,30 @@ mod parsers {
     }
 
     // rfc2812.txt:330
-    pub fn trailing(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    fn trailing(i: &[u8]) -> IResult<&[u8], &[u8]> {
         take_while(|c| c == b' ' || c == b':' || is_nospcrlfcl(c))(i)
     }
 
     // rfc2812.txt:327
-    pub fn nospcrlfcl(i: &[u8]) -> IResult<&[u8], char> {
+    fn nospcrlfcl(i: &[u8]) -> IResult<&[u8], char> {
         none_of("\0\r\n :")(i)
     }
 
-    pub fn is_nospcrlfcl(c: u8) -> bool {
+    fn is_nospcrlfcl(c: u8) -> bool {
         c != 0 && c != b'\r' && c != b'\n' && c != b' ' && c != b':'
     }
 
     // rfc2812.txt:322
-    pub fn prefix(i: &[u8]) -> IResult<&[u8], Prefix> {
+    fn prefix(i: &[u8]) -> IResult<&[u8], Prefix> {
         let (i, _) = char(':')(i)?;
-        let (i, servnick) = alt((servername, nickname_part))(i)?;
+        let (i, servnick) = alt((prefix_servername, prefix_nickname))(i)?;
         // Note: the trailing SPACE needed to be pulled into the subparsers in order to
         //       differentiate the parts.
         Ok((i, servnick))
     }
 
     // rfc2812.txt:322
-    pub fn nickname_part(i: &[u8]) -> IResult<&[u8], Prefix> {
+    fn prefix_nickname(i: &[u8]) -> IResult<&[u8], Prefix> {
         let (i, nick) = nickname(i)?;
         fn excl_user(i: &[u8]) -> IResult<&[u8], &[u8]> {
             let (i, _excl) = char('!')(i)?;
@@ -143,14 +143,14 @@ mod parsers {
     }
 
     // rfc2812.txt:366
-    pub fn servername(i: &[u8]) -> IResult<&[u8], Prefix> {
+    fn prefix_servername(i: &[u8]) -> IResult<&[u8], Prefix> {
         let (i, s) = map(hostname, |x| Prefix::Server(x))(i)?;
         let (i, _) = char(' ')(i)?;
         Ok((i, s))
     }
 
     // rfc2812.txt:373
-    pub fn ip4addr(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    fn ip4addr(i: &[u8]) -> IResult<&[u8], &[u8]> {
         pub fn ip(i: &[u8]) -> IResult<&[u8], u8> {
             let (i, _) = take_while_m_n(1, 3, is_digit)(i)?;
             let (i, _) = char('.')(i)?;
@@ -165,19 +165,19 @@ mod parsers {
     }
 
     // rfc2812.txt:374
-    pub fn ip6addr(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    fn ip6addr(i: &[u8]) -> IResult<&[u8], &[u8]> {
         // FIXME
         let (i, x) = take_until(" ")(i)?;
         Ok((i, x))
     }
 
     // rfc2812.txt:367
-    pub fn host(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    fn host(i: &[u8]) -> IResult<&[u8], &[u8]> {
         alt((hostname, hostaddr))(i)
     }
 
     // rfc2812.txt:372
-    pub fn hostaddr(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    fn hostaddr(i: &[u8]) -> IResult<&[u8], &[u8]> {
         alt((ip4addr, ip6addr))(i)
     }
 
@@ -193,7 +193,7 @@ mod parsers {
         recognize(hostname_)(i)
     }
 
-    pub fn dot_prefixed<'a>(
+    fn dot_prefixed<'a>(
         p: impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a [u8]>,
     ) -> impl Fn(&'a [u8]) -> IResult<&'a [u8], &'a [u8]> {
         move |i: &'a [u8]| {
@@ -207,7 +207,7 @@ mod parsers {
     }
 
     // rfc2812.txt:369
-    pub fn shortname(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    fn shortname(i: &[u8]) -> IResult<&[u8], &[u8]> {
         pub fn shortname_(i: &[u8]) -> IResult<&[u8], &[u8]> {
             let (i, _first) = alt((letter, digit))(i)?;
             let (i, mut _rest) = take_while(|c| is_alphabetic(c) || is_digit(c) || c == b'-')(i)?;
@@ -218,19 +218,19 @@ mod parsers {
     }
 
     // rfc2812.txt:323
-    pub fn command(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    fn command(i: &[u8]) -> IResult<&[u8], &[u8]> {
         let (i, cmd) = alt((take_while_m_n(3, 3, is_digit), take_until(" ")))(i)?;
         Ok((i, cmd))
     }
 
     // rfc2812.txt:401
-    pub fn user(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    fn user(i: &[u8]) -> IResult<&[u8], &[u8]> {
         take_while1(|c: u8| !(b"\0\r\n @".contains(&c)))(i)
     }
 
     // rfc2812.txt:376
-    pub fn nickname(i: &[u8]) -> IResult<&[u8], &[u8]> {
-        pub fn nickname_(i: &[u8]) -> IResult<&[u8], &[u8]> {
+    fn nickname(i: &[u8]) -> IResult<&[u8], &[u8]> {
+        fn nickname_(i: &[u8]) -> IResult<&[u8], &[u8]> {
             let (i, _first) = alt((letter, special))(i)?;
             // XXX the RFC specifies only up to 8 additional chars, however, e.g. freenode
             //     names may be way longer ... just go all out and use many0 to capture it all
@@ -242,22 +242,22 @@ mod parsers {
     }
 
     // rfc2812.txt:407
-    pub fn digit(i: &[u8]) -> IResult<&[u8], char> {
+    fn digit(i: &[u8]) -> IResult<&[u8], char> {
         one_of("0123456789")(i)
     }
 
     // rfc2812.txt:406
-    pub fn letter(i: &[u8]) -> IResult<&[u8], char> {
+    fn letter(i: &[u8]) -> IResult<&[u8], char> {
         one_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")(i)
     }
 
     // rfc2812.txt:409
-    pub fn special(i: &[u8]) -> IResult<&[u8], char> {
+    fn special(i: &[u8]) -> IResult<&[u8], char> {
         one_of("[]\\`_^{|}")(i)
     }
 
     // rfc2812.txt:409
-    pub fn is_special(i: u8) -> bool {
+    fn is_special(i: u8) -> bool {
         b"[]\\`_^{|}".contains(&i)
     }
 }
