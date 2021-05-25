@@ -232,7 +232,7 @@ impl Context {
 
     pub async fn update(&self) -> Result<(), std::io::Error> {
         if self.shutdown.get() {
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, std::io::Error::from(std::io::ErrorKind::Other)));
+            return Err(std::io::ErrorKind::Other.into());
         }
 
         // Join channels we want to join...
@@ -257,7 +257,7 @@ impl Context {
 
         if bytes == 0 {
             self.shutdown.set(true);
-            return Ok(());
+            return Err(std::io::ErrorKind::BrokenPipe.into());
         }
 
         let mut i = &self.bufs.buf.borrow()[..bytes];
@@ -269,6 +269,16 @@ impl Context {
             match message(i) {
                 Ok((r, msg)) => {
                     i = r;
+
+                    // Take special care for error messages
+                    if msg.command == CommandCode::Error {
+                        eprintln!("Got ERROR message: {}, closing down", msg);
+                        self.quit();
+                        futures::executor::block_on(async {
+                            self.update().await;
+                        });
+                        return Err(std::io::ErrorKind::Other.into());
+                    }
 
                     for h in self.allmsg_handlers.iter() {
                         h.handle(self, &msg)?;

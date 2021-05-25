@@ -69,7 +69,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
             if bytes == 0 {
                 // EOF?
                 context.quit();
-                return Ok::<_, std::io::Error>(());
+                return Err::<(), std::io::Error>(std::io::ErrorKind::BrokenPipe.into());
             }
 
             let bytes = &stdin_buf[..bytes];
@@ -124,9 +124,29 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
         tokio::pin!(irc_read, stdin_read);
 
         tokio::select! {
-            Ok(_) = irc_read   => (),
-            Ok(_) = stdin_read => (),
-            else => break,
+            // Err(e) = &irc_read => {
+            //     eprintln!("Error: {:?}", &e);
+            //     return Err(e);
+            // }
+            // Err(e) = &stdin_read => {
+            //     eprintln!("Error from stdin: {:?}", &e);
+            //     return Err(e);
+            // }
+            r = irc_read => {
+                if let Err(e) = r {
+                    eprintln!("Encountered an error from irc_read: {:?}", e);
+                    return Err(std::io::ErrorKind::Other.into());
+                }
+            }
+            r = stdin_read => {
+                if let Err(e) = r {
+                    break;
+                }
+            }
+            else => {
+                eprintln!("Error ...");
+                return Err(std::io::ErrorKind::Other.into());
+            },
         }
         ;
 
