@@ -401,7 +401,6 @@ impl MessageHandler for SubstituteLastHandler {
             self.last_msg
                 .borrow_mut()
                 .insert((dst.clone(), nick.clone()), msg.params[1].to_string());
-            eprintln!("{} new last message '{}'", nick, msg.params[1].to_string());
             return Ok(HandlerResult::NotInterested);
         }
 
