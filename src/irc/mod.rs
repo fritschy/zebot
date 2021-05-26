@@ -104,7 +104,8 @@ impl Context {
         handlers.insert(CommandCode::Ping, vec![Box::new(PingHandler)]);
 
         let mut allmsg_handlers: Vec<Box<dyn MessageHandler>> = Vec::new();
-        allmsg_handlers.push(Box::new(PrintMessageHandler::new()));
+        // XXX: disable print handler, rely on irc2::parse_ng() output.
+        // allmsg_handlers.push(Box::new(PrintMessageHandler::new()));
 
         Ok(Context {
             bufs: ReaderBuf::new(),

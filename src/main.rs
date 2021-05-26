@@ -60,7 +60,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     while !context.is_shutdown() {
         // Read from server and stdin simultaneously
         let stdin_read = async {
-            let prompt = format!("{}> ", current_channel);
+            let prompt = format!("\n{}> ", current_channel);
             stdout.write_all(prompt.as_bytes()).await?;
             stdout.flush().await?;
 
@@ -146,7 +146,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
             else => {
                 eprintln!("Error ...");
                 return Err(std::io::ErrorKind::Other.into());
-            },
+            }
         }
         ;
 

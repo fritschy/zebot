@@ -7,7 +7,7 @@ pub(crate) fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
     loop {
         match parsers::message(i) {
             Ok((r, msg)) => {
-                eprint!("\n[{}] [irc2/parser] {:4}", Local::now().to_rfc3339(), msg);
+                eprint!("\n[{}] {:4}", Local::now().format("%F %H:%M:%S%.3f"), msg);
                 i = r;
                 if i.len() == 0 {
                     break;
