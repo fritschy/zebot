@@ -13,6 +13,7 @@ pub use handler::*;
 pub(crate) use message::*;
 pub(crate) use util::*;
 use tokio::time::{Timeout, timeout_at};
+use crate::zebot_version;
 
 mod message;
 
@@ -147,8 +148,8 @@ impl Context {
 
     pub fn logon(&self) {
         let msg = format!(
-            "USER {} none none :The Bot\r\nNICK :{}\r\n",
-            self.user.nick, self.user.nick,
+            "USER {} none none :The Bot version {}\r\nNICK :{}\r\n",
+            self.user.nick, zebot_version(), self.user.nick,
         );
 
         println!("Logging on with {} as {}", self.user.user, self.user.nick);
