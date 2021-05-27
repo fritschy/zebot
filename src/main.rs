@@ -57,12 +57,18 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 
     context.logon();
 
+    let mut got_timeout = false;
+
     while !context.is_shutdown() {
+        let need_prompt = !got_timeout;
+
         // Read from server and stdin simultaneously
         let stdin_read = async {
-            let prompt = format!("\n{}> ", current_channel);
-            stdout.write_all(prompt.as_bytes()).await?;
-            stdout.flush().await?;
+            if need_prompt {
+                let prompt = format!("\n{}> ", current_channel);
+                stdout.write_all(prompt.as_bytes()).await?;
+                stdout.flush().await?;
+            }
 
             let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
 
@@ -124,25 +130,30 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
         tokio::pin!(irc_read, stdin_read);
 
         tokio::select! {
-            // Err(e) = &irc_read => {
-            //     eprintln!("Error: {:?}", &e);
-            //     return Err(e);
-            // }
-            // Err(e) = &stdin_read => {
-            //     eprintln!("Error from stdin: {:?}", &e);
-            //     return Err(e);
-            // }
             r = irc_read => {
-                if let Err(e) = r {
-                    eprintln!("Encountered an error from irc_read: {:?}", e);
-                    return Err(std::io::ErrorKind::Other.into());
+                match r {
+                    Err(e) => {
+                        if e.kind() == std::io::ErrorKind::TimedOut {
+                            got_timeout = true;
+                        } else {
+                            eprintln!("Encountered an error from irc_read: {:?}", e);
+                            return Err(std::io::ErrorKind::Other.into());
+                        }
+                    }
+
+                    _ => {
+                        got_timeout = false;
+                    }
                 }
             }
+
             r = stdin_read => {
+                got_timeout = false;
                 if let Err(e) = r {
                     break;
                 }
             }
+
             else => {
                 eprintln!("Error ...");
                 return Err(std::io::ErrorKind::Other.into());

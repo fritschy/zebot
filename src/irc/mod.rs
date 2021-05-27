@@ -12,6 +12,7 @@ pub(crate) use command::*;
 pub use handler::*;
 pub(crate) use message::*;
 pub(crate) use util::*;
+use tokio::time::{Timeout, timeout_at};
 
 mod message;
 
@@ -251,15 +252,21 @@ impl Context {
 
         self.send_pending_messages().await?;
 
-        let bytes = self
-            .bufs
-            .read_from(&mut self.connection.borrow_mut())
-            .await?;
-
-        if bytes == 0 {
-            self.shutdown.set(true);
-            return Err(std::io::ErrorKind::BrokenPipe.into());
-        }
+        // try to timeout ...
+        let bytes = {
+            let conn = &mut self.connection.borrow_mut();
+            let bytes_f = self
+                .bufs
+                .read_from(conn);
+            match timeout_at(tokio::time::Instant::now() + tokio::time::Duration::from_secs(5), bytes_f).await? {
+                Ok(x) => {
+                    x
+                }
+                _ => {
+                    return Ok(());
+                }
+            }
+        };
 
         let mut i = &self.bufs.buf.borrow()[..bytes];
 
