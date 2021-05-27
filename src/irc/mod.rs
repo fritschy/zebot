@@ -72,7 +72,7 @@ impl ReaderBuf {
         if bytes == 0 {
             Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "Read of length 0 fro server",
+                "Read of length 0 from server",
             ))
         } else {
             Ok(off + bytes)
@@ -234,7 +234,10 @@ impl Context {
 
     pub async fn update(&self) -> Result<(), std::io::Error> {
         if self.shutdown.get() {
-            return Err(std::io::ErrorKind::Other.into());
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Connection shutdown requested"
+            ));
         }
 
         // Join channels we want to join...
