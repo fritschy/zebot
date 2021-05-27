@@ -5,8 +5,6 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::ToSocketAddrs;
 use std::time::Duration;
 
-use last_git_commit::LastGitCommit;
-
 use futures_util::future::FutureExt;
 use json::JsonValue;
 use rand::{Rng, thread_rng};
@@ -170,14 +168,9 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     context.update().await
 }
 
-pub fn zebot_version() -> String {
-    format!("git-{}", LastGitCommit::new().build().unwrap().id().short())
-}
-
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let m = clap::App::new("zebot")
-        .version(zebot_version().as_str())
         .about("An IRC Bot")
         .arg(
             clap::Arg::with_name("server")

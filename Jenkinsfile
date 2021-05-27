@@ -19,7 +19,7 @@ pipeline {
     
         stage('Build-Release') {
             steps {
-                sh 'cargo build --release'
+                sh 'cargo build --release --target=x86_64-unknown-linux-musl'
             }
         }
     }
