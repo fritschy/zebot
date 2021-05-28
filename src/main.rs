@@ -57,18 +57,12 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 
     context.logon();
 
-    let mut got_timeout = false;
-
     while !context.is_shutdown() {
-        let need_prompt = !got_timeout;
-
         // Read from server and stdin simultaneously
         let stdin_read = async {
-            if need_prompt {
-                let prompt = format!("\n{}> ", current_channel);
-                stdout.write_all(prompt.as_bytes()).await?;
-                stdout.flush().await?;
-            }
+            let prompt = format!("\n{}> ", current_channel);
+            stdout.write_all(prompt.as_bytes()).await?;
+            stdout.flush().await?;
 
             let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
 
@@ -133,24 +127,16 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
             r = irc_read => {
                 match r {
                     Err(e) => {
-                        if e.kind() == std::io::ErrorKind::TimedOut {
-                            got_timeout = true;
-                        } else {
-                            eprintln!("Encountered an error from irc_read: {:?}", e);
-                            return Err(std::io::ErrorKind::Other.into());
-                        }
+                        return Err(e);
                     }
 
-                    _ => {
-                        got_timeout = false;
-                    }
+                    _ => (),
                 }
             }
 
             r = stdin_read => {
-                got_timeout = false;
                 if let Err(e) = r {
-                    break;
+                    return Err(e);
                 }
             }
 

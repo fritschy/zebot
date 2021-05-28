@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::io::{Read, Stdout, Write};
 use std::net::SocketAddr;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use irc2;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -12,7 +12,7 @@ pub(crate) use command::*;
 pub use handler::*;
 pub(crate) use message::*;
 pub(crate) use util::*;
-use tokio::time::{Timeout, timeout_at};
+use tokio::time::{Duration, timeout};
 
 mod message;
 
@@ -258,17 +258,9 @@ impl Context {
         // try to timeout ...
         let bytes = {
             let conn = &mut self.connection.borrow_mut();
-            let bytes_f = self
-                .bufs
-                .read_from(conn);
-            match timeout_at(tokio::time::Instant::now() + tokio::time::Duration::from_secs(5), bytes_f).await? {
-                Ok(x) => {
-                    x
-                }
-                _ => {
-                    return Ok(());
-                }
-            }
+            timeout(Duration::from_secs(5 * 60),
+                    self.bufs.read_from(conn)
+            ).await??
         };
 
         let mut i = &self.bufs.buf.borrow()[..bytes];
