@@ -14,12 +14,18 @@ use url::Url;
 
 use irc::*;
 
+use clap::crate_version;
+
 mod irc;
 mod callout;
 
 use crate::callout::Callouthandler;
 use tracing_subscriber::FmtSubscriber;
 use tracing::{error as log_error, Level};
+
+pub fn zebot_version() -> String {
+    return crate_version!().to_string();
+}
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args
@@ -505,6 +511,10 @@ fn handle<'a>(
             .next()
             .unwrap_or(msg.params[1].as_ref())
         {
+            "!version" | "!ver" => {
+                let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                ctx.message(&dst, &format!("I am version {}, let's not talk about it!", crate_version!()));
+            }
             "!help" | "!commands" => {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
                 ctx.message(&dst, "I am ZeBot, I can say Hello and answer to !fortune, !bash, !echo and !errno <int>");
@@ -545,7 +555,7 @@ fn greet(nick: &str) -> String {
         "Moin {}, _o/",
         "Moin {}, \\o_",
         "Moin {}, o_/",
-        "OI! Ein {}!",
+        "OI, Ein {}!",
         "{}, n'Moin!",
     ];
 
