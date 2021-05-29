@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
+use tracing::error as log_error;
+
 #[derive(Eq, PartialEq, Hash, Debug)]
 pub enum CommandCode {
     Numeric(u32),
@@ -37,7 +39,7 @@ impl<'a> From<Cow<'a, str>> for CommandCode {
                 b"ERROR" => CommandCode::Error,
                 b"UNKNOWN" => CommandCode::Unknown,
                 _ => {
-                    eprintln!("WARNING: Fallback to generic CommandCode for {}", c);
+                    log_error!("WARNING: Fallback to generic CommandCode for {}", c);
                     CommandCode::Generic(c.to_string())
                 }
             }

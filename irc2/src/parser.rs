@@ -1,5 +1,5 @@
 use nom::IResult;
-use chrono::prelude::*;
+use tracing::info;
 
 use crate::*;
 
@@ -7,7 +7,7 @@ pub(crate) fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
     loop {
         match parsers::message(i) {
             Ok((r, msg)) => {
-                eprint!("\n[{}] {:4}", Local::now().format("%F %H:%M:%S%.3f"), msg);
+                info!("{:4}", msg);
                 i = r;
                 if i.len() == 0 {
                     break;

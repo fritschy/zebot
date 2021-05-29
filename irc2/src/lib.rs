@@ -1,5 +1,7 @@
 use nom::lib::std::fmt::Display;
 
+use tracing::error as log_error;
+
 mod parser;
 
 #[derive(Debug, PartialEq)]
@@ -63,6 +65,6 @@ impl<'a> Display for Message<'a> {
 
 pub fn parse_ng<'a>(i: &'a [u8]) {
     if let Err(x) = parser::parse(i) {
-        eprintln!("Error from irc2::parse_ng: {:?}", x);
+        log_error!("Error from irc2::parse_ng: {:?}", x);
     }
 }

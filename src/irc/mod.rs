@@ -14,6 +14,8 @@ pub(crate) use message::*;
 pub(crate) use util::*;
 use tokio::time::{Duration, timeout};
 
+use tracing::{error as log_error, info, warn};
+
 mod message;
 
 mod util;
@@ -151,7 +153,7 @@ impl Context {
             self.user.nick, self.user.nick,
         );
 
-        println!("Logging on with {} as {}", self.user.user, self.user.nick);
+        info!("Logging on with {} as {}", self.user.user, self.user.nick);
 
         self.send(msg);
 
@@ -161,7 +163,7 @@ impl Context {
             self.message("NickServ", &format!("identify {}", pw.trim()));
             Ok(())
         }) {
-            eprintln!("Could not open password file {}: {:?}", &self.password_file, e);
+            warn!("Could not open password file {}: {:?}", &self.password_file, e);
         }
     }
 
@@ -275,7 +277,7 @@ impl Context {
 
                     // Take special care for error messages
                     if msg.command == CommandCode::Error {
-                        eprintln!("Got ERROR message: {}, closing down", msg);
+                        log_error!("Got ERROR message: {}, closing down", msg);
                         self.quit();
                         futures::executor::block_on(async {
                             self.update().await;
@@ -293,7 +295,7 @@ impl Context {
                             for h in x.iter() {
                                 match h.handle(self, &msg)? {
                                     HandlerResult::Error(x) => {
-                                        eprintln!("Message handler errored: {}", x)
+                                        log_error!("Message handler errored: {}", x)
                                     }
                                     HandlerResult::Handled => break, // Really?
                                     _ => (),

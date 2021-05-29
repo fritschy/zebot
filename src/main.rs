@@ -9,7 +9,7 @@ use futures_util::future::FutureExt;
 use json::JsonValue;
 use rand::{Rng, thread_rng};
 use rand::prelude::IteratorRandom;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
 use url::Url;
 
 use irc::*;
@@ -18,6 +18,8 @@ mod irc;
 mod callout;
 
 use crate::callout::Callouthandler;
+use tracing_subscriber::FmtSubscriber;
+use tracing::{error as log_error, Level};
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     let addr = args
@@ -28,8 +30,6 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
         .expect("Could not resolve host address");
 
     let mut stdin = tokio::io::stdin();
-    let mut stdout = tokio::io::stdout();
-
     let mut stdin_buf = vec![0u8; 1024];
 
     let nick = args.value_of("nick").unwrap();
@@ -60,10 +60,6 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     while !context.is_shutdown() {
         // Read from server and stdin simultaneously
         let stdin_read = async {
-            let prompt = format!("\n{}> ", current_channel);
-            stdout.write_all(prompt.as_bytes()).await?;
-            stdout.flush().await?;
-
             let bytes = stdin.read(stdin_buf.as_mut_slice()).await?;
 
             if bytes == 0 {
@@ -85,7 +81,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
                 match cmd.to_lowercase().as_str() {
                     "msg" => {
                         if args.len() < 1 {
-                            eprintln!("Error: /MSG Destination Message");
+                            log_error!("Error: /MSG Destination Message");
                         } else {
                             context.message(args[0], &args[1..].join(" "));
                         }
@@ -93,7 +89,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 
                     "join" => {
                         if args.len() != 1 {
-                            eprintln!("Error: /JOIN CHANNEL");
+                            log_error!("Error: /JOIN CHANNEL");
                         } else {
                             context.join(args[0]);
                         }
@@ -101,14 +97,14 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 
                     "part" => {
                         if args.len() != 1 {
-                            eprintln!("Error: /PART CHANNEL");
+                            log_error!("Error: /PART CHANNEL");
                         } else {
                             context.leave(args[0]);
                         }
                     }
 
                     x => {
-                        eprintln!("Unknown command /{}", x);
+                        log_error!("Unknown command /{}", x);
                     }
                 }
             } else {
@@ -141,7 +137,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
             }
 
             else => {
-                eprintln!("Error ...");
+                log_error!("Error ...");
                 return Err(std::io::ErrorKind::Other.into());
             }
         }
@@ -156,6 +152,18 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+    // a builder for `FmtSubscriber`.
+    let subscriber = FmtSubscriber::builder()
+        // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
+        // will be written to stdout.
+        .with_max_level(Level::TRACE)
+        // completes the builder.
+        .with_thread_names(true)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("setting default subscriber failed");
+
     let m = clap::App::new("zebot")
         .about("An IRC Bot")
         .arg(
@@ -190,9 +198,9 @@ async fn main() -> std::io::Result<()> {
 
     loop {
         if let Err(x) = async_main(&m).await {
-            eprintln!("Encountered an error, will retry...: {:?}", x);
+            log_error!("Encountered an error, will retry...: {:?}", x);
         } else {
-            eprintln!("Exiting as requested, cya.");
+            log_error!("Exiting as requested, cya.");
             break;
         }
 
@@ -207,7 +215,7 @@ fn nag_user(nick: &str) -> String {
         let nick = nick.replace(|x: char| !x.is_alphanumeric(), "_");
         let nag_file = format!("nag-{}.txt", nick);
         let f = std::fs::File::open(&nag_file).map_err(|e| {
-            eprintln!("Could not open nag-file '{}'", &nag_file);
+            log_error!("Could not open nag-file '{}'", &nag_file);
             e
         })?;
         let br = BufReader::new(f);
@@ -219,7 +227,7 @@ fn nag_user(nick: &str) -> String {
     }
 
     doit(nick).unwrap_or_else(|x| {
-        eprintln!("Could not open/read nag-file for {}: {:?}", nick, x);
+        log_error!("Could not open/read nag-file for {}: {:?}", nick, x);
         format!("Hey {}", nick)
     })
 }
@@ -296,7 +304,7 @@ impl MessageHandler for URLCollector {
                         "http" | "https" | "ftp" => {
                             let nick = msg.get_nick();
                             let chan = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-                            eprintln!("Got an url from {} {}: {}", &chan, &nick, url.as_ref());
+                            log_error!("Got an url from {} {}: {}", &chan, &nick, url.as_ref());
                             self.add_url(&nick, &chan, url.as_ref())?;
                         }
                         _ => (),
@@ -333,7 +341,7 @@ fn parse_substitution(re: &str) -> Option<(String, String, String)> {
         match s {
             0 => {
                 if c != 's' && c != 'S' {
-                    eprintln!("Not a substitution");
+                    log_error!("Not a substitution");
                     return None;
                 }
                 s = 1;
@@ -365,13 +373,13 @@ fn parse_substitution(re: &str) -> Option<(String, String, String)> {
                     flags.push(c);
                 }
                 _ => {
-                    eprintln!("Invalid flags");
+                    log_error!("Invalid flags");
                     return None;
                 }
             },
 
             _ => {
-                eprintln!("Invalid state parsing re");
+                log_error!("Invalid state parsing re");
                 dbg!(&re, &c, &s);
                 return None;
             }
@@ -392,7 +400,7 @@ impl MessageHandler for SubstituteLastHandler {
 
         if !msg.params[1].starts_with("!s") && !msg.params[1].starts_with("!S") {
             if msg.params[1].starts_with("\x01ACTION") {
-                eprintln!("Ignoring ACTION message");
+                log_error!("Ignoring ACTION message");
                 return Ok(HandlerResult::NotInterested);
             }
             self.last_msg
@@ -431,7 +439,7 @@ impl MessageHandler for SubstituteLastHandler {
                     if new_msg != last.as_str() {
                         // if save_subst {
                         //     self.last_msg.borrow_mut().insert((dst.clone(), nick.clone()), new_msg.to_string());
-                        //     eprintln!("{} new last message '{}'", nick, msg.params[1].to_string());
+                        //     log_error!("{} new last message '{}'", nick, msg.params[1].to_string());
                         // }
 
                         let new_msg = if big_s {

@@ -3,6 +3,8 @@ use stopwatch::Stopwatch;
 use crate::{is_json_flag_set, text_box};
 use std::path::Path;
 
+use tracing::error as log_error;
+
 pub struct Callouthandler;
 
 impl MessageHandler for Callouthandler {
@@ -58,13 +60,13 @@ impl MessageHandler for Callouthandler {
         let cmd = std::process::Command::new(path).args(&args).output();
         let s = s.elapsed();
 
-        eprintln!("Handler {} completed in {:?}", command, s);
+        log_error!("Handler {} completed in {:?}", command, s);
 
         match cmd {
             Ok(p) => {
                 if !p.status.success() {
                     let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-                    eprintln!("Handler failed with code {}", p.status.code().unwrap());
+                    log_error!("Handler failed with code {}", p.status.code().unwrap());
                     dbg!(&p);
                     ctx.message(&dst, "Somehow, that did not work...");
                     return Ok(HandlerResult::Handled);
@@ -150,20 +152,20 @@ impl MessageHandler for Callouthandler {
 
                         Err(e) => {
                             // Perhaps have this as a fallback for non-json handlers? What could possibly go wrong!
-                            eprintln!(
+                            log_error!(
                                 "Could not parse json from handler {}: {}",
                                 command, response
                             );
-                            eprintln!("Error: {:?}", e);
+                            log_error!("Error: {:?}", e);
                         }
                     }
                 } else {
-                    eprintln!("Could not from_utf8 for handler {}", command);
+                    log_error!("Could not from_utf8 for handler {}", command);
                 }
             }
 
             Err(e) => {
-                eprintln!("Could not execute handler: {:?}", e);
+                log_error!("Could not execute handler: {:?}", e);
                 return Ok(HandlerResult::NotInterested);
             }
         }
