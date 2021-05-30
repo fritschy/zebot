@@ -557,6 +557,7 @@ fn greet(nick: &str) -> String {
         "Moin {}, o_/",
         "OI, Ein {}!",
         "{}, n'Moin!",
+        "{}, grüß Gott, äh - Zeus! Was gibt's denn Neu's?",
     ];
 
     if let Some(s) = PATS.iter().choose(&mut thread_rng()) {
