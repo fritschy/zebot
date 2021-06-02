@@ -2,6 +2,7 @@
 
 from bs4 import BeautifulSoup
 from urllib.request import urlopen
+from random import randint
 
 from handler_lib import *
 
@@ -9,12 +10,20 @@ lines = []
 qid = ""
 
 try:
-    with urlopen("http://german-bash.org/action/random") as r:
-        bs = BeautifulSoup(r.read(), features="lxml")
-    qb = bs.find(attrs={"class": "quotebox"})
-    qid = next((x.attrs['name'] for x in qb.children if x.name))
-    quote = bs.find('div', {'class': 'zitat'})
-    lines = list(filter(lambda x: x!='', map(str.strip, quote.strings)))
+    if randint(0, 1) == 0:
+        with urlopen("http://german-bash.org/action/random") as r:
+            bs = BeautifulSoup(r.read(), features="lxml")
+        qb = bs.find(attrs={"class": "quotebox"})
+        qid = "de/{}".format(next((x.attrs['name'] for x in qb.children if x.name)))
+        quote = bs.find('div', {'class': 'zitat'})
+        lines = list(filter(lambda x: x!='', map(str.strip, quote.strings)))
+    else:
+        with urlopen("http://bash.org/?random") as r:
+            bs = BeautifulSoup(r.read(), features="lxml")
+        q = bs.find(attrs={"class": "quote"})
+        qid = "en/{}".format(list(q.children)[0].attrs['href'].strip('?'))
+        q = bs.find(attrs={"class": "qt"})
+        lines = q.text.splitlines()
 except:
     log({"exc_info": sys.exc_info()})
     handler_exit(0, lines=["Uhm, did not recognize the HTML ..."], box=0)
