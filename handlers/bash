@@ -9,8 +9,16 @@ from handler_lib import *
 lines = []
 qid = ""
 
+engrish = randint(0, 1) == 0
+args = get_split_args()
+if len(args) >= 1:
+    if args[0].lower() == "en":
+        engrish = True
+    if args[0].lower() == "de":
+        engrish = False
+
 try:
-    if randint(0, 1) == 0:
+    if not engrish:
         with urlopen("http://german-bash.org/action/random") as r:
             bs = BeautifulSoup(r.read(), features="lxml")
         qb = bs.find(attrs={"class": "quotebox"})
@@ -18,7 +26,7 @@ try:
         quote = bs.find('div', {'class': 'zitat'})
         lines = list(filter(lambda x: x!='', map(str.strip, quote.strings)))
     else:
-        with urlopen("http://bash.org/?random") as r:
+        with urlopen("http://bash.org/?random1") as r:
             bs = BeautifulSoup(r.read(), features="lxml")
         q = bs.find(attrs={"class": "quote"})
         qid = "en/{}".format(list(q.children)[0].attrs['href'].strip('?'))
