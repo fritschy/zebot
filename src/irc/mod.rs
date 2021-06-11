@@ -4,7 +4,6 @@ use std::io::{Read, Stdout, Write};
 use std::net::SocketAddr;
 use std::time::Instant;
 
-use irc2;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -55,7 +54,7 @@ impl ReaderBuf {
         let len = self.last.borrow().len();
         if len > 0 {
             let mut l = self.last.borrow_mut();
-            &mut self.buf.borrow_mut()[..l.len()].copy_from_slice(l.as_slice());
+            self.buf.borrow_mut()[..l.len()].copy_from_slice(l.as_slice());
             let off = l.len();
             l.clear();
             off
@@ -106,7 +105,7 @@ impl Context {
         let mut handlers: HashMap<CommandCode, Vec<Box<dyn MessageHandler>>> = HashMap::new();
         handlers.insert(CommandCode::Ping, vec![Box::new(PingHandler)]);
 
-        let mut allmsg_handlers: Vec<Box<dyn MessageHandler>> = Vec::new();
+        let allmsg_handlers: Vec<Box<dyn MessageHandler>> = Vec::new();
         // XXX: disable print handler, rely on irc2::parse_ng() output.
         // allmsg_handlers.push(Box::new(PrintMessageHandler::new()));
 
@@ -197,7 +196,7 @@ impl Context {
         } else {
             self.handlers
                 .entry(code)
-                .or_insert(Vec::with_capacity(1))
+                .or_insert_with(|| Vec::with_capacity(1))
                 .push(h);
         }
     }
@@ -280,8 +279,8 @@ impl Context {
                         log_error!("Got ERROR message: {}, closing down", msg);
                         self.quit();
                         futures::executor::block_on(async {
-                            self.update().await;
-                        });
+                            self.update().await
+                        })?;
                         return Err(std::io::ErrorKind::Other.into());
                     }
 

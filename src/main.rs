@@ -24,7 +24,7 @@ use tracing_subscriber::FmtSubscriber;
 use tracing::{error as log_error, Level};
 
 pub fn zebot_version() -> String {
-    return crate_version!().to_string();
+    crate_version!().to_string()
 }
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
@@ -40,7 +40,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 
     let nick = args.value_of("nick").unwrap();
     let user = args.value_of("user").unwrap();
-    let pass = args.value_of("pass-file").map(|x| String::from(x));
+    let pass = args.value_of("pass-file").map(String::from);
     let mut context = Context::connect(addr, User::new(nick, user), pass).await?;
 
     for i in args.value_of("channel").unwrap().split(|x| x == ',') {
@@ -79,14 +79,14 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
             let x = String::from_utf8_lossy(bytes);
             let x = x.trim_end();
 
-            if x.starts_with("/") {
-                let mut cmd_and_args = x[1..].split_whitespace();
+            if let Some(x) = x.strip_prefix('/') {
+                let mut cmd_and_args = x.split_whitespace();
                 let cmd = cmd_and_args.next().unwrap();
                 let args = cmd_and_args.collect::<Vec<_>>();
 
                 match cmd.to_lowercase().as_str() {
                     "msg" => {
-                        if args.len() < 1 {
+                        if args.is_empty() {
                             log_error!("Error: /MSG Destination Message");
                         } else {
                             context.message(args[0], &args[1..].join(" "));
@@ -127,12 +127,8 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 
         tokio::select! {
             r = irc_read => {
-                match r {
-                    Err(e) => {
-                        return Err(e);
-                    }
-
-                    _ => (),
+                if let Err(e) = r {
+                    return Err(e);
                 }
             }
 
@@ -266,7 +262,7 @@ fn text_box<T: Display, S: Display>(
 }
 
 fn is_json_flag_set(jv: &JsonValue) -> bool {
-    jv.as_bool().unwrap_or_else(|| false.into()) || jv.as_number().unwrap_or_else(|| 0.into()) != 0
+    jv.as_bool().unwrap_or(false) || jv.as_number().unwrap_or_else(|| 0.into()) != 0
 }
 
 struct URLCollector {
@@ -303,21 +299,17 @@ impl MessageHandler for URLCollector {
     ) -> Result<HandlerResult, std::io::Error> {
         let text = &msg.params[1];
 
-        for word in text.split(" ") {
-            match Url::parse(word) {
-                Ok(url) => {
-                    match url.scheme() {
-                        "http" | "https" | "ftp" => {
-                            let nick = msg.get_nick();
-                            let chan = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-                            log_error!("Got an url from {} {}: {}", &chan, &nick, url.as_ref());
-                            self.add_url(&nick, &chan, url.as_ref())?;
-                        }
-                        _ => (),
+        for word in text.split(' ') {
+            if let Ok(url) = Url::parse(word) {
+                match url.scheme() {
+                    "http" | "https" | "ftp" => {
+                        let nick = msg.get_nick();
+                        let chan = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                        log_error!("Got an url from {} {}: {}", &chan, &nick, url.as_ref());
+                        self.add_url(&nick, &chan, url.as_ref())?;
                     }
+                    _ => (),
                 }
-
-                Err(_) => (),
             }
         }
 
@@ -411,12 +403,12 @@ impl MessageHandler for SubstituteLastHandler {
             }
             self.last_msg
                 .borrow_mut()
-                .insert((dst.clone(), nick.clone()), msg.params[1].to_string());
+                .insert((dst, nick), msg.params[1].to_string());
             return Ok(HandlerResult::NotInterested);
         }
 
         let re = &msg.params[1][1..];
-        let big_s = msg.params[1].chars().skip(1).next().unwrap() == 'S';
+        let big_s = msg.params[1].chars().nth(1).unwrap() == 'S';
 
         let (pat, subst, flags) = if let Some(x) = parse_substitution(re) {
             x
@@ -425,7 +417,7 @@ impl MessageHandler for SubstituteLastHandler {
             return Ok(HandlerResult::Handled);
         };
 
-        let (flags, _save_subst) = if let Some(_) = flags.find("s") {
+        let (flags, _save_subst) = if flags.contains('s') {
             (flags.replace("s", ""), true)
         } else {
             (flags, false)
@@ -434,7 +426,7 @@ impl MessageHandler for SubstituteLastHandler {
         match regex::Regex::new(&pat) {
             Ok(re) => {
                 if let Some(last) = self.last_msg.borrow().get(&(dst.clone(), nick.clone())) {
-                    let new_msg = if flags.find("g").is_some() {
+                    let new_msg = if flags.contains('g') {
                         re.replace_all(last, subst.as_str())
                     } else if let Ok(n) = flags.parse::<usize>() {
                         re.replacen(last, n, subst.as_str())
@@ -507,9 +499,9 @@ fn handle<'a>(
 
         match msg.params[1]
             .as_ref()
-            .split(" ")
+            .split(' ')
             .next()
-            .unwrap_or(msg.params[1].as_ref())
+            .unwrap_or_else(|| msg.params[1].as_ref())
         {
             "!version" | "!ver" => {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());

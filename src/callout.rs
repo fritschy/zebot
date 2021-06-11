@@ -13,14 +13,14 @@ impl MessageHandler for Callouthandler {
         ctx: &Context,
         msg: &Message<'a>,
     ) -> Result<HandlerResult, std::io::Error> {
-        if msg.params.len() < 2 || !msg.params[1].starts_with("!") {
+        if msg.params.len() < 2 || !msg.params[1].starts_with('!') {
             return Ok(HandlerResult::NotInterested);
         }
 
         let command = msg.params[1][1..]
             .split_ascii_whitespace()
             .next()
-            .unwrap_or_else(|| "");
+            .unwrap_or_default();
         if !command
             .chars()
             .all(|x| x.is_ascii_alphanumeric() || x == '-' || x == '_')
@@ -86,66 +86,64 @@ impl MessageHandler for Callouthandler {
                                 dbg!(&response);
                                 ctx.message(&dst, "Somehow, that did not work...");
                                 return Ok(HandlerResult::Handled);
+                            } else if !is_json_flag_set(&response["box"]) {
+                                for l in response["lines"].members() {
+                                    ctx.message(&dst, &l.to_string());
+                                }
                             } else {
-                                if !is_json_flag_set(&response["box"]) {
-                                    for l in response["lines"].members() {
-                                        ctx.message(&dst, &l.to_string());
-                                    }
-                                } else {
-                                    let lines = response["lines"]
-                                        .members()
+                                let lines = response["lines"]
+                                    .members()
+                                    .map(|x| x.to_string())
+                                    .collect::<Vec<_>>();
+                                let lines = if is_json_flag_set(&response["wrap"])
+                                    && lines.iter().map(|x| x.len()).any(|l| l > 80)
+                                {
+                                    let nlines = lines.len();
+
+                                    let s = if lines[nlines - 1].starts_with("    ") {
+                                        let (lines, last) = lines.split_at(nlines - 1);
+
+                                        let s = lines.concat();
+                                        let s = textwrap::fill(&s, 80);
+
+                                        let s = s + "\n";
+                                        s + last[0].as_str()
+                                    } else {
+                                        let s = lines.concat();
+                                        textwrap::fill(&s, 80)
+                                    };
+
+                                    s.split(|f| f == '\n')
                                         .map(|x| x.to_string())
-                                        .collect::<Vec<_>>();
-                                    let lines = if is_json_flag_set(&response["wrap"])
-                                        && lines.iter().map(|x| x.len()).any(|l| l > 80)
-                                    {
-                                        let nlines = lines.len();
-
-                                        let s = if lines[nlines - 1].starts_with("    ") {
-                                            let (lines, last) = lines.split_at(nlines - 1);
-
-                                            let s = lines.concat();
-                                            let s = textwrap::fill(&s, 80);
-
-                                            let s = s + "\n";
-                                            s + last[0].as_str()
-                                        } else {
-                                            let s = lines.concat();
-                                            textwrap::fill(&s, 80)
-                                        };
-
-                                        s.split(|f| f == '\n')
-                                            .map(|x| x.to_string())
-                                            .collect::<Vec<_>>()
-                                    } else if is_json_flag_set(&response["wrap_single_lines"]) {
-                                        let mut new_lines = Vec::with_capacity(lines.len());
-                                        let opt = textwrap::Options::new(80)
-                                            .splitter(textwrap::NoHyphenation)
-                                            .subsequent_indent("  ");
-                                        for l in lines {
-                                            new_lines.extend(
-                                                textwrap::wrap(&l, &opt)
-                                                    .iter()
-                                                    .map(|x| x.to_string()),
-                                            );
-                                        }
-                                        new_lines
-                                    } else {
-                                        lines
-                                    };
-
-                                    // append link if provided
-                                    let lines = if let Some(s) = response["link"].as_str() {
-                                        let mut lines = lines;
-                                        lines.push(format!("    -- {}", s));
-                                        lines
-                                    } else {
-                                        lines
-                                    };
-
-                                    for i in text_box(lines.iter(), response["title"].as_str()) {
-                                        ctx.message(&dst, &i);
+                                        .collect::<Vec<_>>()
+                                } else if is_json_flag_set(&response["wrap_single_lines"]) {
+                                    let mut new_lines = Vec::with_capacity(lines.len());
+                                    let opt = textwrap::Options::new(80)
+                                        .splitter(textwrap::NoHyphenation)
+                                        .subsequent_indent("  ");
+                                    for l in lines {
+                                        new_lines.extend(
+                                            textwrap::wrap(&l, &opt)
+                                                .iter()
+                                                .map(|x| x.to_string()),
+                                        );
                                     }
+                                    new_lines
+                                } else {
+                                    lines
+                                };
+
+                                // append link if provided
+                                let lines = if let Some(s) = response["link"].as_str() {
+                                    let mut lines = lines;
+                                    lines.push(format!("    -- {}", s));
+                                    lines
+                                } else {
+                                    lines
+                                };
+
+                                for i in text_box(lines.iter(), response["title"].as_str()) {
+                                    ctx.message(&dst, &i);
                                 }
                             }
                         }

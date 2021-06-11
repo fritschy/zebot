@@ -33,7 +33,7 @@ pub struct Message<'a> {
 }
 
 impl<'a> Message<'a> {
-    pub fn get_reponse_destination(&self, channels: &Vec<String>) -> String {
+    pub fn get_reponse_destination(&self, channels: &[String]) -> String {
         if channels.iter().any(|x| x.as_str() == self.params[0]) {
             self.params[0].to_string()
         } else {
@@ -45,9 +45,9 @@ impl<'a> Message<'a> {
         self.prefix
             .as_ref()
             .unwrap()
-            .split("!")
+            .split('!')
             .next()
-            .unwrap_or(self.prefix.as_ref().unwrap())
+            .unwrap_or_else(|| self.prefix.as_ref().unwrap())
             .to_string()
     }
 }
