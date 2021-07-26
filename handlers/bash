@@ -9,30 +9,43 @@ from handler_lib import *
 lines = []
 qid = ""
 
-engrish = randint(0, 1) == 0
+index = randint(0, 1)
 args = get_split_args()
 if len(args) >= 1:
     if args[0].lower() == "en":
-        engrish = True
+        index = 1
     if args[0].lower() == "de":
-        engrish = False
+        index = 0
+
+def german(url):
+    with urlopen(url) as r:
+        bs = BeautifulSoup(r.read(), features="lxml")
+    qb = bs.find(attrs={"class": "quotebox"})
+    qid = "de/{}".format(next((x.attrs['name'] for x in qb.children if x.name)))
+    quote = bs.find('div', {'class': 'zitat'})
+    lines = list(filter(lambda x: x!='', map(str.strip, quote.strings)))
+    return (qid, lines)
+
+def engrish(url):
+    with urlopen(url) as r:
+        bs = BeautifulSoup(r.read(), features="lxml")
+    q = bs.find(attrs={"class": "quote"})
+    qid = "en/{}".format(list(q.children)[0].attrs['href'].strip('?'))
+    q = bs.find(attrs={"class": "qt"})
+    lines = q.text.splitlines()
+    return (qid, lines)
+
+bashes = [(german, "http://german-bash.org/action/random"), (engrish, "http://bash.org/?random1")]
+what, url = bashes[index]
 
 try:
-    if not engrish:
-        with urlopen("http://german-bash.org/action/random") as r:
-            bs = BeautifulSoup(r.read(), features="lxml")
-        qb = bs.find(attrs={"class": "quotebox"})
-        qid = "de/{}".format(next((x.attrs['name'] for x in qb.children if x.name)))
-        quote = bs.find('div', {'class': 'zitat'})
-        lines = list(filter(lambda x: x!='', map(str.strip, quote.strings)))
-    else:
-        with urlopen("http://bash.org/?random1") as r:
-            bs = BeautifulSoup(r.read(), features="lxml")
-        q = bs.find(attrs={"class": "quote"})
-        qid = "en/{}".format(list(q.children)[0].attrs['href'].strip('?'))
-        q = bs.find(attrs={"class": "qt"})
-        lines = q.text.splitlines()
+    qid, lines = what(url)
 except:
+    with urlopen(url) as r:
+        bs = BeautifulSoup(r.read(), features="lxml")
+        lines = bs.text.splitlines()
+        if len(lines) == 1: # uhm, special case ...
+            handler_exit(0, lines=["Not today: {}".format(lines[0])], box=0)
     log({"exc_info": sys.exc_info()})
     handler_exit(0, lines=["Uhm, did not recognize the HTML ..."], box=0)
 
