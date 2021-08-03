@@ -41,12 +41,17 @@ what, url = bashes[index]
 try:
     qid, lines = what(url)
 except:
-    with urlopen(url) as r:
-        bs = BeautifulSoup(r.read(), features="lxml")
-        lines = bs.text.splitlines()
-        if len(lines) == 1: # uhm, special case ...
-            handler_exit(0, lines=["Not today: {}".format(lines[0])], box=0)
-    log({"exc_info": sys.exc_info()})
-    handler_exit(0, lines=["Uhm, did not recognize the HTML ..."], box=0)
+    try:
+        what, url = bashes[(index+1) % len(bashes)]
+        qid, lines = what(url)
+        qid = "{} (first try failed)".format(qid)
+    except:
+        with urlopen(url) as r:
+            bs = BeautifulSoup(r.read(), features="lxml")
+            lines = bs.text.splitlines()
+            if len(lines) == 1: # uhm, special case ...
+                handler_exit(0, lines=["Not today: {}".format(lines[0])], box=0)
+        log({"exc_info": sys.exc_info()})
+        handler_exit(0, lines=["Uhm, did not recognize the HTML ..."], box=0)
 
 handler_exit(0, lines=lines, box=1, title=qid, wrap_single_lines=1)
