@@ -63,6 +63,11 @@ impl ReaderBuf {
         }
     }
 
+    fn push_to_last(&self, mut i: &[u8]) {
+        let l = &mut self.last.borrow_mut();
+        l.copy_from_slice(i);
+    }
+
     async fn read_from(&self, source: &mut TcpStream) -> Result<usize, std::io::Error> {
         let off = self.fill_from_last();
 
@@ -305,11 +310,7 @@ impl Context {
                 }
 
                 Err(_) => {
-                    let l = &mut self.bufs.last.borrow_mut();
-                    l.reserve(i.len());
-                    for x in i {
-                        l.push(*x);
-                    }
+                    self.bufs.push_to_last(i);
                     break;
                 }
             }
