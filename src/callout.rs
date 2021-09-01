@@ -4,7 +4,6 @@ use crate::{is_json_flag_set, text_box};
 use std::path::Path;
 
 use tracing::error as log_error;
-use std::os::unix::prelude::CommandExt;
 
 pub struct Callouthandler;
 
@@ -15,27 +14,6 @@ impl MessageHandler for Callouthandler {
         msg: &Message<'a>,
     ) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() < 2 || !msg.params[1].starts_with('!') {
-            let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-            for url in msg.params[1]
-                .split_ascii_whitespace()
-                .filter(|x| x.starts_with("https://") || x.starts_with("http://")) {
-                let url_orig = url.to_string();
-                let url = url.strip_prefix("http://").unwrap_or_else(|| url.strip_prefix("https://").unwrap());
-                let url = url.strip_prefix("www.").unwrap_or(url);
-                if url.starts_with("youtube.com") || url.starts_with("youtu.be") {
-                    if let Ok(output) = std::process::Command::new("youtube-dl")
-                        .arg("--get-title")
-                        .arg("--socket-timeout")
-                        .arg("5")
-                        .arg(&url_orig)
-                        .output() {
-                        let title = String::from_utf8_lossy(output.stdout.as_ref());
-                        if !title.is_empty() {
-                            ctx.message(&dst, &format!("{} has title '{}'", &url_orig, title.trim()));
-                        }
-                    }
-                }
-            }
             return Ok(HandlerResult::NotInterested);
         }
 

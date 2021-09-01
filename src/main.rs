@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write, Error};
 use std::net::ToSocketAddrs;
 use std::time::Duration;
 
@@ -54,6 +54,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
         .next()
         .unwrap();
 
+    context.register_handler(CommandCode::PrivMsg, Box::new(YoutubeTitleHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(Callouthandler));
     context.register_handler(CommandCode::Join, Box::new(GreetHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(ZeBotAnswerHandler));
@@ -263,6 +264,59 @@ fn text_box<T: Display, S: Display>(
 
 fn is_json_flag_set(jv: &JsonValue) -> bool {
     jv.as_bool().unwrap_or(false) || jv.as_number().unwrap_or_else(|| 0.into()) != 0
+}
+
+struct YoutubeTitleHandler;
+
+impl MessageHandler for YoutubeTitleHandler {
+    fn handle(&self, ctx: &Context, msg: &Message) -> Result<HandlerResult, Error> {
+        if msg.params.len() > 1 {
+            let yt_re = regex::Regex::new(r"https?://((www.)?youtube\.com/watch|youtu.be/)").unwrap();
+            for url in msg.params[1]
+                .split_ascii_whitespace()
+                .filter(|x| x.starts_with("https://") || x.starts_with("http://")) {
+                if yt_re.is_match(url) {
+                    if let Ok(output) = std::process::Command::new("python3")
+                        .current_dir("youtube-dl")
+                        .args([
+                            "-m", "youtube_dl", "--quiet", "--get-title", "--socket-timeout", "5", &url,
+                        ])
+                        .output() {
+                        let err = String::from_utf8_lossy(output.stderr.as_ref());
+                        if !err.is_empty() {
+                            log_error!("Got error from youtube-dl: {}", err);
+                            let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                            ctx.message(&dst, &format!("Got an error for URL {}, is this a valid video URL?", &url));
+                        } else {
+                            let title = String::from_utf8_lossy(output.stdout.as_ref());
+                            if !title.is_empty() {
+                                let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                                ctx.message(&dst, &format!("{} has title '{}'", &url, title.trim()));
+                            }
+                        }
+                    }
+                } else {
+                    // I can't figure out how to not make this one crash with tokio...
+                    // use select::document::Document;
+                    // use select::predicate::{Class, Name};
+                    // let r = reqwest::blocking::get(url);
+                    // if let Ok(r) = r {
+                    //     if let Ok(b) = r.bytes() {
+                    //         let s = String::from_utf8_lossy(b.as_ref());
+                    //         let d = Document::from(s.as_ref());
+                    //         if let Some(h1) = d.find(Name("h1")).next() {
+                    //             let title = h1.text();
+                    //             let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                    //             ctx.message(&dst, &format!("{} has title '{}'", &url, title.trim()));
+                    //         }
+                    //     }
+                    // }
+                }
+            }
+        }
+
+        Ok(HandlerResult::NotInterested)
+    }
 }
 
 struct URLCollector {
