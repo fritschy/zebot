@@ -278,7 +278,7 @@ impl MessageHandler for YoutubeTitleHandler {
                 if yt_re.is_match(url) {
                     if let Ok(output) = std::process::Command::new("python3")
                         .current_dir("youtube-dl")
-                        .args([
+                        .args(&[
                             "-m", "youtube_dl", "--quiet", "--get-title", "--socket-timeout", "5", &url,
                         ])
                         .output() {
