@@ -1,7 +1,7 @@
 use crate::irc::{MessageHandler, Context, HandlerResult};
-use stopwatch::Stopwatch;
 use crate::{is_json_flag_set, text_box};
 use std::path::Path;
+use std::time::Instant;
 
 use tracing::error as log_error;
 use tracing::info;
@@ -59,7 +59,7 @@ impl MessageHandler for Callouthandler {
 
         dbg!(&args);
 
-        let s = Stopwatch::start_new();
+        let s = Instant::now();
         let cmd = std::process::Command::new(path).args(&args).output();
         let s = s.elapsed();
 

@@ -5,6 +5,8 @@ use std::io::{BufRead, BufReader, Write, Error};
 use std::net::ToSocketAddrs;
 use std::time::Duration;
 
+use chrono::prelude::*;
+
 use futures_util::future::FutureExt;
 use json::JsonValue;
 use rand::{Rng, thread_rng};
@@ -345,7 +347,7 @@ impl URLCollector {
             .append(true)
             .open(&self.filename)?;
 
-        let line = format!("{}\t{}\t{}\t{}\n", chrono::prelude::Local::now().to_rfc3339(), chan, nick, url);
+        let line = format!("{}\t{}\t{}\t{}\n", Local::now().to_rfc3339(), chan, nick, url);
 
         f.write_all(line.as_bytes())
     }

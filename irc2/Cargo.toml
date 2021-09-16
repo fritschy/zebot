@@ -9,7 +9,7 @@ nom = "7.0"
 tracing = "0.1"
 
 [profile.release]
-#debug = true
+debug = true
 lto = true
 codegen-units = 1
 

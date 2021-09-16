@@ -12,7 +12,6 @@ futures-util = "0.3"
 clap = "2.33"
 rand = "0.8"
 json = "0.12"
-stopwatch = "0.0.7"
 textwrap = "0.13"
 regex = "1"
 irc2 = { path = "irc2/" }
