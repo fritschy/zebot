@@ -3,67 +3,88 @@ use nom::lib::std::fmt::Display;
 use tracing::error as log_error;
 
 mod parser;
+pub mod command;
+
+pub use parser::parse;
 
 #[derive(Debug, PartialEq)]
-pub enum Prefix<'a> {
-    Server(&'a [u8]),
-    Nickname(Nickname<'a>),
+pub enum Prefix {
+    Server(String),
+    Nickname(Nickname),
 }
 
-impl<'a> Display for Prefix<'a> {
+impl Display for Prefix {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         match self {
-            Prefix::Server(s) => write!(f, "{}", String::from_utf8_lossy(s)),
+            Prefix::Server(s) => write!(f, "{}", s),
             Prefix::Nickname(n) => write!(f, "{}", n),
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Nickname<'a> {
-    nickname: &'a [u8],
+pub struct Nickname {
+    nickname: String,
     // XXX: in rfc2812 this should actually be an host: Option<(Option<user>, host)>
     //      but I really dont want to be it this way...
-    user: Option<&'a [u8]>,
-    host: Option<&'a [u8]>,
+    user: Option<String>,
+    host: Option<String>,
 }
 
-impl<'a> Display for Nickname<'a> {
+impl Display for Nickname {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", String::from_utf8_lossy(self.nickname))?;
+        write!(f, "{}", self.nickname)?;
         if let Some(host) = &self.host {
             if let Some(user) = &self.user {
-                write!(f, "!{}", String::from_utf8_lossy(user))?;
+                write!(f, "!{}", user)?;
             }
-            write!(f, "@{}", String::from_utf8_lossy(host))?;
+            write!(f, "@{}", host)?;
         }
         Ok(())
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Message<'a> {
-    prefix: Option<Prefix<'a>>,
-    command: &'a [u8],
-    params: Vec<&'a [u8]>,
+pub struct Message {
+    pub prefix: Option<Prefix>,
+    pub command: command::CommandCode,
+    pub params: Vec<String>,
 }
 
-impl<'a> Display for Message<'a> {
+impl Display for Message {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
         if let Some(p) = &self.prefix {
             write!(f, "P:{} ", p)?;
         }
-        write!(f, "C:{} ", String::from_utf8_lossy(self.command))?;
+        write!(f, "C:{} ", self.command.to_string())?;
         if !self.params.is_empty() {
             for p in &self.params {
-                write!(f, "'{}' ", String::from_utf8_lossy(p))?;
+                write!(f, "'{}' ", p)?;
             }
         }
         Ok(())
     }
 }
 
-pub fn parse_ng<'a>(i: &'a [u8]) {
+impl Message {
+    pub fn get_reponse_destination(&self, channels: &[String]) -> String {
+        if channels.iter().any(|x| x == &self.params[0]) {
+            self.params[0].clone()
+        } else {
+            self.get_nick()
+        }
+    }
+
+    pub fn get_nick(&self) -> String {
+        if let Some(nick) = &self.prefix {
+            format!("{}", nick)
+        } else {
+            String::new() // FIXME: WAH!
+        }
+    }
+}
+
+pub fn parse_ng(i: &[u8]) {
     if let Err(x) = parser::parse(i) {
         log_error!("Error from irc2::parse_ng: {:?}", x);
     }

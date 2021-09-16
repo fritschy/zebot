@@ -3,7 +3,7 @@ use tracing::info;
 
 use crate::*;
 
-pub(crate) fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
+pub fn parse(mut i: &[u8]) -> IResult<&[u8], Message> {
     loop {
         match parsers::message(i) {
             Ok((r, msg)) => {
@@ -21,7 +21,7 @@ pub(crate) fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
         }
     }
 
-    Ok((i, ()))
+    Err(nom::Err::Error(nom::error::Error::new(i,nom::error::ErrorKind::IsNot)))
 }
 
 mod parsers {
@@ -46,11 +46,12 @@ mod parsers {
         let (i, command) = parsers::command(i)?;
         let (i, p) = opt(params)(i)?;
         let (i, _) = crlf(i)?;
+        let p = p.map(|x| x.iter().map(|x| String::from_utf8_lossy(*x).to_string()).collect());
         Ok((
             i,
             Message {
                 prefix,
-                command,
+                command: command.into(),
                 params: p.unwrap_or_else(|| Vec::new()),
             },
         ))
@@ -133,20 +134,20 @@ mod parsers {
         Ok((
             i,
             Prefix::Nickname(Nickname {
-                nickname: nick,
+                nickname: String::from_utf8_lossy(nick).to_string(),
                 host: if let Some((_, u)) = &rest {
-                    Some(u.clone())
+                    Some(String::from_utf8_lossy(u).to_string())
                 } else {
                     None
                 },
-                user: if let Some((u, _)) = rest { u } else { None },
+                user: if let Some((u, _)) = rest { u.map(|u| String::from_utf8_lossy(u).to_string()) } else { None },
             }),
         ))
     }
 
     // rfc2812.txt:366
     fn prefix_servername(i: &[u8]) -> IResult<&[u8], Prefix> {
-        let (i, s) = map(hostname, |x| Prefix::Server(x))(i)?;
+        let (i, s) = map(hostname, |x| Prefix::Server(String::from_utf8_lossy(x).to_string()))(i)?;
         let (i, _) = char(' ')(i)?;
         Ok((i, s))
     }
