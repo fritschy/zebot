@@ -40,7 +40,7 @@ impl ReaderBuf {
     fn new() -> Self {
         ReaderBuf {
             buf: RefCell::new(vec![0; 4096]),
-            last: RefCell::new(vec![0; 4096]),
+            last: RefCell::new(Vec::new()),
         }
     }
 
@@ -60,6 +60,7 @@ impl ReaderBuf {
     fn push_to_last(&self, i: &[u8]) {
         let l = &mut self.last.borrow_mut();
         let len = i.len();
+        l.resize(len, 0);
         l[..len].copy_from_slice(i);
     }
 
