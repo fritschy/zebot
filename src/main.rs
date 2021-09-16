@@ -276,11 +276,11 @@ impl MessageHandler for YoutubeTitleHandler {
             for url in msg.params[1]
                 .split_ascii_whitespace()
                 .filter(|x| x.starts_with("https://") || x.starts_with("http://")) {
-                if yt_re.is_match(&url) {
+                if yt_re.is_match(url) {
                     if let Ok(output) = std::process::Command::new("python3")
                         .current_dir("youtube-dl")
                         .args(&[
-                            "-m", "youtube_dl", "--quiet", "--get-title", "--socket-timeout", "5", &url,
+                            "-m", "youtube_dl", "--quiet", "--get-title", "--socket-timeout", "5", url,
                         ])
                         .output() {
                         let err = String::from_utf8_lossy(output.stderr.as_ref());
@@ -463,7 +463,7 @@ impl MessageHandler for SubstituteLastHandler {
         }
 
         let re = &msg.params[1][1..];
-        let big_s = msg.params[1].chars().nth(1).unwrap() == 'S';
+        let big_s = msg.params[1].chars().nth(1).unwrap_or('_') == 'S';
 
         let (pat, subst, flags) = if let Some(x) = parse_substitution(re) {
             x

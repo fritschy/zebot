@@ -9,7 +9,6 @@ use tokio::net::TcpStream;
 
 pub(crate) use irc2::command::*;
 pub use handler::*;
-pub(crate) use util::*;
 use tokio::time::{Duration, timeout, sleep};
 
 use tracing::{error as log_error, info, warn};
@@ -41,7 +40,7 @@ impl ReaderBuf {
     fn new() -> Self {
         ReaderBuf {
             buf: RefCell::new(vec![0; 4096]),
-            last: RefCell::new(Vec::new()),
+            last: RefCell::new(vec![0; 4096]),
         }
     }
 
@@ -58,14 +57,10 @@ impl ReaderBuf {
         }
     }
 
-    fn push_to_last(&self, mut i: &[u8]) {
-        if !i.is_empty() {
-            let l = &mut self.last.borrow_mut();
-            if !l.is_empty() {
-                let len = i.len();
-                l[..len].copy_from_slice(i);
-            }
-        }
+    fn push_to_last(&self, i: &[u8]) {
+        let l = &mut self.last.borrow_mut();
+        let len = i.len();
+        l[..len].copy_from_slice(i);
     }
 
     async fn read_from(&self, source: &mut TcpStream) -> Result<usize, std::io::Error> {
@@ -184,11 +179,10 @@ impl Context {
                         msgs.clear();
                         break;
                     }
-                    Err(BorrowMutError) => {
+                    Err(_bme) => {
                         sleep(Duration::from_millis(100)).await
                     }
                 }
-                break;
             }
         });
         self.send("QUIT :Need to restart the Kubernetes VM\r\n".to_string());
@@ -202,7 +196,7 @@ impl Context {
                         msgs.push(msg);
                         break;
                     }
-                    Err(BorrowMutError) => {
+                    Err(_) => {
                         sleep(Duration::from_millis(100)).await
                     }
                 }

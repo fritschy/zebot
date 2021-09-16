@@ -1,9 +1,8 @@
-use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
 use tracing::error as log_error;
 
-#[derive(Eq, PartialEq, Hash, Debug)]
+#[derive(Eq, PartialEq, Hash, Debug, Clone)]
 pub enum CommandCode {
     Numeric(u32),
     Generic(String),
