@@ -1,17 +1,18 @@
-use crate::irc::{MessageHandler, Context, Message, HandlerResult};
+use crate::irc::{MessageHandler, Context, HandlerResult};
 use stopwatch::Stopwatch;
 use crate::{is_json_flag_set, text_box};
 use std::path::Path;
 
 use tracing::error as log_error;
+use irc2::Message;
 
 pub struct Callouthandler;
 
 impl MessageHandler for Callouthandler {
-    fn handle<'a>(
+    fn handle(
         &self,
         ctx: &Context,
-        msg: &Message<'a>,
+        msg: &Message,
     ) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() < 2 || !msg.params[1].starts_with('!') {
             return Ok(HandlerResult::NotInterested);

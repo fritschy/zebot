@@ -22,6 +22,7 @@ mod callout;
 use crate::callout::Callouthandler;
 use tracing_subscriber::FmtSubscriber;
 use tracing::{error as log_error, Level};
+use irc2::Message;
 
 pub fn zebot_version() -> String {
     crate_version!().to_string()
@@ -275,7 +276,7 @@ impl MessageHandler for YoutubeTitleHandler {
             for url in msg.params[1]
                 .split_ascii_whitespace()
                 .filter(|x| x.starts_with("https://") || x.starts_with("http://")) {
-                if yt_re.is_match(url) {
+                if yt_re.is_match(&url) {
                     if let Ok(output) = std::process::Command::new("python3")
                         .current_dir("youtube-dl")
                         .args(&[
@@ -346,14 +347,14 @@ impl URLCollector {
 }
 
 impl MessageHandler for URLCollector {
-    fn handle<'a>(
+    fn handle(
         &self,
         ctx: &Context,
-        msg: &Message<'a>,
+        msg: &Message,
     ) -> Result<HandlerResult, std::io::Error> {
         let text = &msg.params[1];
 
-        for word in text.split(' ') {
+        for word in text.split_ascii_whitespace() {
             if let Ok(url) = Url::parse(word) {
                 match url.scheme() {
                     "http" | "https" | "ftp" => {
@@ -442,10 +443,10 @@ fn parse_substitution(re: &str) -> Option<(String, String, String)> {
 }
 
 impl MessageHandler for SubstituteLastHandler {
-    fn handle<'a>(
+    fn handle(
         &self,
         ctx: &Context,
-        msg: &Message<'a>,
+        msg: &Message,
     ) -> Result<HandlerResult, std::io::Error> {
         let nick = msg.get_nick();
         let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
@@ -457,7 +458,7 @@ impl MessageHandler for SubstituteLastHandler {
             }
             self.last_msg
                 .borrow_mut()
-                .insert((dst, nick), msg.params[1].to_string());
+                .insert((dst, nick), msg.params[1].clone());
             return Ok(HandlerResult::NotInterested);
         }
 
@@ -518,10 +519,10 @@ impl MessageHandler for SubstituteLastHandler {
 struct ZeBotAnswerHandler;
 
 impl MessageHandler for ZeBotAnswerHandler {
-    fn handle<'a>(
+    fn handle(
         &self,
         ctx: &Context,
-        msg: &Message<'a>,
+        msg: &Message,
     ) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() > 1 && msg.params[1..].iter().any(|x| x.contains(ctx.nick())) {
             // It would seem, I need some utility functions to retrieve message semantics
@@ -542,18 +543,17 @@ impl MessageHandler for ZeBotAnswerHandler {
 struct MiscCommandsHandler;
 
 impl MessageHandler for MiscCommandsHandler {
-fn handle<'a>(
+fn handle(
     &self,
     ctx: &Context,
-    msg: &Message<'a>,
+    msg: &Message,
 ) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() < 2 {
             return Ok(HandlerResult::NotInterested);
         }
 
         match msg.params[1]
-            .as_ref()
-            .split(' ')
+            .split_ascii_whitespace()
             .next()
             .unwrap_or_else(|| msg.params[1].as_ref())
         {
@@ -567,11 +567,11 @@ fn handle<'a>(
             }
             "!echo" => {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-                let m = &msg.params[1].as_ref();
+                let m = &msg.params[1];
                 if m.len() > 6 {
-                    let m = m[6..].trim();
+                    let m = &m[6..];
                     if !m.is_empty() {
-                        ctx.message(&dst, &m);
+                        ctx.message(&dst, m);
                     }
                 }
             }
@@ -614,10 +614,10 @@ fn greet(nick: &str) -> String {
 }
 
 impl MessageHandler for GreetHandler {
-    fn handle<'a>(
+    fn handle(
         &self,
         ctx: &Context,
-        msg: &Message<'a>,
+        msg: &Message,
     ) -> Result<HandlerResult, std::io::Error> {
         if *ctx.nick() != msg.get_nick() {
             if let CommandCode::Join = msg.command {

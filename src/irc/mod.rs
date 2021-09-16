@@ -7,19 +7,14 @@ use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
-pub(crate) use command::*;
+pub(crate) use irc2::command::*;
 pub use handler::*;
-pub(crate) use message::*;
 pub(crate) use util::*;
 use tokio::time::{Duration, timeout, sleep};
 
 use tracing::{error as log_error, info, warn};
 
-mod message;
-
 mod util;
-
-mod command;
 
 mod handler;
 
@@ -297,11 +292,8 @@ impl Context {
 
         let mut i = &self.bufs.buf.borrow()[..bytes];
 
-        // feed the received message to the experimental parser ...
-        irc2::parse_ng(i);
-
         loop {
-            match message(i) {
+            match irc2::parse(i) {
                 Ok((r, msg)) => {
                     i = r;
 
