@@ -13,7 +13,6 @@ use tokio::time::{Duration, timeout, sleep};
 
 use tracing::{error as log_error, info, warn};
 use tokio::sync::{RwLock};
-use futures::executor::block_on;
 
 mod util;
 
@@ -131,19 +130,17 @@ impl Context {
         &self.user.nick
     }
 
-    pub fn join(&self, chan: &str) {
-        futures::executor::block_on(async {
-            self.channels.write().await.push(chan.to_string());
-        })
+    pub async fn join(&self, chan: &str) {
+        self.channels.write().await.push(chan.to_string());
     }
 
-    pub fn leave(&self, chan: &str) {
-        if let Some(c) = block_on(async{self.channels.read().await}).iter().position(|x| x == chan) {
-            block_on(async{self.channels.write().await}).remove(c);
+    pub async fn leave(&self, chan: &str) {
+        if let Some(c) = self.channels.read().await.iter().position(|x| x == chan) {
+            self.channels.write().await.remove(c);
         } else {
-            let p = block_on(async{self.joined_channels.read().await}).iter().position(|x| x == chan);
+            let p = self.joined_channels.read().await.iter().position(|x| x == chan);
             if let Some(c) = p {
-                block_on(async{self.joined_channels.write().await}).remove(c);
+                self.joined_channels.write().await.remove(c);
                 let cmd = format!("PART {}\r\n", chan);
                 self.send(cmd);
             }

@@ -52,7 +52,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     let mut context = Context::connect(addr, User::new(nick, user), pass).await?;
 
     for i in args.value_of("channel").unwrap().split(|x| x == ',') {
-        context.join(i);
+        context.join(i).await;
     }
 
     let current_channel = args
@@ -90,7 +90,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
 
             if let Some(x) = x.strip_prefix('/') {
                 let mut cmd_and_args = x.split_whitespace();
-                let cmd = cmd_and_args.next().unwrap();
+                let cmd = cmd_and_args.next().unwrap().trim();
                 let args = cmd_and_args.collect::<Vec<_>>();
 
                 match cmd.to_lowercase().as_str() {
@@ -106,7 +106,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
                         if args.len() != 1 {
                             log_error!("Error: /JOIN CHANNEL");
                         } else {
-                            context.join(args[0]);
+                            context.join(args[0]).await;
                         }
                     }
 
@@ -114,7 +114,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
                         if args.len() != 1 {
                             log_error!("Error: /PART CHANNEL");
                         } else {
-                            context.leave(args[0]);
+                            context.leave(args[0]).await;
                         }
                     }
 
