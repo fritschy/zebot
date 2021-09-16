@@ -322,7 +322,8 @@ impl Context {
                         });
                 }
 
-                Err(_) => {
+                err => {
+                    log_error!("Error from irc2::parse: {:?}", err.unwrap_err());
                     self.bufs.push_to_last(i);
                     break;
                 }

@@ -11,13 +11,11 @@ pub fn parse(i: &[u8]) -> IResult<&[u8], Message> {
                 return Ok((r, msg));
             }
 
-            Err(_) => {
-                break;
+            x => {
+                return x;
             }
         }
     }
-
-    Err(nom::Err::Error(nom::error::Error::new(i,nom::error::ErrorKind::IsNot)))
 }
 
 mod parsers {

@@ -4,6 +4,7 @@ use crate::{is_json_flag_set, text_box};
 use std::path::Path;
 
 use tracing::error as log_error;
+use tracing::info;
 use irc2::Message;
 
 pub struct Callouthandler;
