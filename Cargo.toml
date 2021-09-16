@@ -26,10 +26,10 @@ tracing-subscriber = "0.2"
 #select = "0.5"
 
 [profile.release]
-#debug = true
+debug = true
 lto = true
 codegen-units = 1
-panic = 'abort'
+#panic = 'abort'
 
 [profile.test]
 debug = true

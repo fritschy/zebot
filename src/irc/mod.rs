@@ -11,7 +11,7 @@ pub(crate) use command::*;
 pub use handler::*;
 pub(crate) use message::*;
 pub(crate) use util::*;
-use tokio::time::{Duration, timeout};
+use tokio::time::{Duration, timeout, sleep};
 
 use tracing::{error as log_error, info, warn};
 
@@ -178,14 +178,35 @@ impl Context {
     pub fn quit(&self) {
         self.shutdown.replace(true);
         futures::executor::block_on(async {
-            self.messages.borrow_mut().clear();
+            loop {
+                match self.messages.try_borrow_mut() {
+                    Ok(mut msgs) => {
+                        msgs.clear();
+                        break;
+                    }
+                    Err(BorrowMutError) => {
+                        sleep(Duration::from_millis(100)).await
+                    }
+                }
+                break;
+            }
         });
         self.send("QUIT :Need to restart the Kubernetes VM\r\n".to_string());
     }
 
     pub fn send(&self, msg: String) {
         futures::executor::block_on(async {
-            self.messages.borrow_mut().push(msg);
+            loop {
+                match self.messages.try_borrow_mut() {
+                    Ok(mut msgs) => {
+                        msgs.push(msg);
+                        break;
+                    }
+                    Err(BorrowMutError) => {
+                        sleep(Duration::from_millis(100)).await
+                    }
+                }
+            }
         });
     }
 
@@ -230,7 +251,7 @@ impl Context {
         for (count, m) in self.messages.borrow_mut().drain(..).enumerate() {
             connection.write_all(m.as_bytes()).await?;
             // This does not take into account messages sent with the previous commits...
-            tokio::time::sleep(Duration::from_millis(400 + offset + more_time(count))).await;
+            sleep(Duration::from_millis(400 + offset + more_time(count))).await;
         }
 
         self.last_flush.set(Instant::now());
