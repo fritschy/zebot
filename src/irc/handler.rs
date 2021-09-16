@@ -31,28 +31,3 @@ impl MessageHandler for PingHandler {
         Ok(HandlerResult::Handled)
     }
 }
-
-pub(crate) struct PrintMessageHandler {
-    stdout: Stdout,
-    count: RefCell<usize>,
-}
-
-impl PrintMessageHandler {
-    pub(crate) fn new() -> Self {
-        PrintMessageHandler {
-            stdout: std::io::stdout(),
-            count: RefCell::new(0),
-        }
-    }
-}
-
-impl MessageHandler for PrintMessageHandler {
-    fn handle(&self, _: &Context, msg: &Message) -> Result<HandlerResult, std::io::Error> {
-        let mut count = self.count.borrow_mut();
-        *count += 1;
-        let mut out = self.stdout.lock();
-        let m = format!("\t{}: {}\n", count, msg);
-        out.write_all(m.as_bytes())?;
-        Ok(HandlerResult::NotInterested)   // pretend to not be interested...
-    }
-}
