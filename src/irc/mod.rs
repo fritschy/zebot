@@ -64,8 +64,13 @@ impl ReaderBuf {
     }
 
     fn push_to_last(&self, mut i: &[u8]) {
-        let l = &mut self.last.borrow_mut();
-        l.copy_from_slice(i);
+        if !i.is_empty() {
+            let l = &mut self.last.borrow_mut();
+            if !l.is_empty() {
+                let len = i.len();
+                l[..len].copy_from_slice(i);
+            }
+        }
     }
 
     async fn read_from(&self, source: &mut TcpStream) -> Result<usize, std::io::Error> {
