@@ -322,8 +322,14 @@ impl Context {
                         });
                 }
 
-                err => {
-                    log_error!("Error from irc2::parse: {:?}", err.unwrap_err());
+                // Input ended, no remaining bytes, just continue as normal
+                Err(e) if e.is_incomplete() => {
+                    info!("Need to read more, irc2::parse: {:?}", e);
+                    self.bufs.push_to_last(i);
+                    break;
+                }
+
+                _ => {
                     self.bufs.push_to_last(i);
                     break;
                 }
