@@ -1,6 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::io::{Read, Stdout, Write};
+use std::io::{Read};
 use std::net::SocketAddr;
 use std::time::Instant;
 
@@ -12,6 +12,8 @@ pub use handler::*;
 use tokio::time::{Duration, timeout, sleep};
 
 use tracing::{error as log_error, info, warn};
+use tokio::sync::{RwLock};
+use futures::executor::block_on;
 
 mod util;
 
@@ -84,8 +86,8 @@ impl ReaderBuf {
 
 pub struct Context {
     pub user: User,
-    pub channels: RefCell<Vec<String>>,
-    pub joined_channels: RefCell<Vec<String>>,
+    pub channels: RwLock<Vec<String>>,
+    pub joined_channels: RwLock<Vec<String>>,
     handlers: HashMap<CommandCode, Vec<Box<dyn MessageHandler>>>,
     allmsg_handlers: Vec<Box<dyn MessageHandler>>,
     pub connection: RefCell<TcpStream>,
@@ -112,8 +114,8 @@ impl Context {
 
         Ok(Context {
             bufs: ReaderBuf::new(),
-            channels: RefCell::new(Vec::new()),
-            joined_channels: RefCell::new(Vec::new()),
+            channels: RwLock::new(Vec::new()),
+            joined_channels: RwLock::new(Vec::new()),
             messages: RefCell::new(Vec::new()),
             shutdown: Cell::new(false),
             allmsg_handlers,
@@ -130,17 +132,18 @@ impl Context {
     }
 
     pub fn join(&self, chan: &str) {
-        self.channels.borrow_mut().push(chan.to_string());
+        futures::executor::block_on(async {
+            self.channels.write().await.push(chan.to_string());
+        })
     }
 
-    #[allow(unused)]
     pub fn leave(&self, chan: &str) {
-        if let Some(c) = self.channels.borrow().iter().position(|x| x == chan) {
-            self.channels.borrow_mut().remove(c);
+        if let Some(c) = block_on(async{self.channels.read().await}).iter().position(|x| x == chan) {
+            block_on(async{self.channels.write().await}).remove(c);
         } else {
-            let p = self.joined_channels.borrow().iter().position(|x| x == chan);
+            let p = block_on(async{self.joined_channels.read().await}).iter().position(|x| x == chan);
             if let Some(c) = p {
-                self.joined_channels.borrow_mut().remove(c);
+                block_on(async{self.joined_channels.write().await}).remove(c);
                 let cmd = format!("PART {}\r\n", chan);
                 self.send(cmd);
             }
@@ -268,15 +271,15 @@ impl Context {
         }
 
         // Join channels we want to join...
-        if !self.channels.borrow().is_empty() {
+        if !self.channels.read().await.is_empty() {
             let joins = self
                 .channels
-                .borrow()
+                .read().await
                 .iter()
                 .fold(String::new(), |acc, x| format!("{}JOIN :{}\r\n", acc, x));
             self.joined_channels
-                .borrow_mut()
-                .append(&mut self.channels.borrow_mut());
+                .write().await
+                .append(&mut *self.channels.write().await);
             self.send(joins);
         }
 

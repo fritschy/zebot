@@ -25,6 +25,7 @@ use crate::callout::Callouthandler;
 use tracing_subscriber::FmtSubscriber;
 use tracing::{error as log_error, Level};
 use irc2::Message;
+use futures::executor::block_on;
 
 pub fn zebot_version() -> String {
     format!("{} r{}", crate_version!(), env!("GIT_HASH"))
@@ -290,12 +291,12 @@ impl MessageHandler for YoutubeTitleHandler {
                         let err = String::from_utf8_lossy(output.stderr.as_ref());
                         if !err.is_empty() {
                             log_error!("Got error from youtube-dl: {}", err);
-                            let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                            let dst = msg.get_reponse_destination(&block_on(async { ctx.joined_channels.read().await }));
                             ctx.message(&dst, &format!("Got an error for URL {}, is this a valid video URL?", &url));
                         } else {
                             let title = String::from_utf8_lossy(output.stdout.as_ref());
                             if !title.is_empty() {
-                                let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                                let dst = msg.get_reponse_destination(&block_on(async { ctx.joined_channels.read().await }));
                                 ctx.message(&dst, &format!("{} has title '{}'", &url, title.trim()));
                             }
                         }
@@ -363,7 +364,7 @@ impl MessageHandler for URLCollector {
                 match url.scheme() {
                     "http" | "https" | "ftp" => {
                         let nick = msg.get_nick();
-                        let chan = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                        let chan = msg.get_reponse_destination(&block_on( async { ctx.joined_channels.read().await }));
                         log_error!("Got an url from {} {}: {}", &chan, &nick, url.as_ref());
                         self.add_url(&nick, &chan, url.as_ref())?;
                     }
@@ -453,7 +454,7 @@ impl MessageHandler for SubstituteLastHandler {
         msg: &Message,
     ) -> Result<HandlerResult, std::io::Error> {
         let nick = msg.get_nick();
-        let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+        let dst = msg.get_reponse_destination(&block_on(async { ctx.joined_channels.read().await }));
 
         if !msg.params[1].starts_with("!s") && !msg.params[1].starts_with("!S") {
             if msg.params[1].starts_with("\x01ACTION") {
@@ -535,7 +536,7 @@ impl MessageHandler for ZeBotAnswerHandler {
             } else {
                 format!("Hey {}", &msg.get_nick())
             };
-            let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+            let dst = msg.get_reponse_destination(&block_on(async {ctx.joined_channels.read().await}));
             ctx.message(&dst, &m);
         }
 
@@ -562,15 +563,15 @@ fn handle(
             .unwrap_or_else(|| msg.params[1].as_ref())
         {
             "!version" | "!ver" => {
-                let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                let dst = msg.get_reponse_destination(&block_on(async { ctx.joined_channels.read().await }));
                 ctx.message(&dst, &format!("I am version {}, let's not talk about it!", zebot_version()));
             }
             "!help" | "!commands" => {
-                let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                let dst = msg.get_reponse_destination(&block_on(async { ctx.joined_channels.read().await }));
                 ctx.message(&dst, "I am ZeBot, I can say Hello and answer to !fortune, !bash, !echo and !errno <int>");
             }
             "!echo" => {
-                let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                let dst = msg.get_reponse_destination(&block_on(async { ctx.joined_channels.read().await }));
                 let m = &msg.params[1];
                 if m.len() > 6 {
                     let m = &m[6..];
@@ -582,7 +583,7 @@ fn handle(
             "!exec" | "!sh" | "!shell" | "!powershell" | "!power-shell" => {
                 let m = format!("Na aber wer wird denn gleich, {}", msg.get_nick());
                 ctx.message(
-                    msg.get_reponse_destination(&ctx.joined_channels.borrow())
+                    msg.get_reponse_destination(&block_on(async { ctx.joined_channels.read().await }))
                         .as_str(),
                     &m,
                 );
@@ -625,7 +626,7 @@ impl MessageHandler for GreetHandler {
     ) -> Result<HandlerResult, std::io::Error> {
         if *ctx.nick() != msg.get_nick() {
             if let CommandCode::Join = msg.command {
-                ctx.message(&msg.get_reponse_destination(&ctx.joined_channels.borrow()),
+                ctx.message(&msg.get_reponse_destination(&block_on(async { ctx.joined_channels.read().await })),
                             &greet(&msg.get_nick()),
                 );
             }

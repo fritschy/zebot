@@ -6,6 +6,7 @@ use std::path::Path;
 use tracing::error as log_error;
 use tracing::info;
 use irc2::Message;
+use futures::executor::block_on;
 
 pub struct Callouthandler;
 
@@ -67,7 +68,7 @@ impl MessageHandler for Callouthandler {
         match cmd {
             Ok(p) => {
                 if !p.status.success() {
-                    let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
+                    let dst = msg.get_reponse_destination(&block_on(async { ctx.joined_channels.read().await }));
                     log_error!("Handler failed with code {}", p.status.code().unwrap());
                     dbg!(&p);
                     ctx.message(&dst, "Somehow, that did not work...");
@@ -81,7 +82,7 @@ impl MessageHandler for Callouthandler {
                             let dst = if response.contains("dst") {
                                 response["dst"].to_string()
                             } else {
-                                msg.get_reponse_destination(&ctx.joined_channels.borrow())
+                                msg.get_reponse_destination(&block_on(async { ctx.joined_channels.read().await }))
                             };
 
                             if response.contains("error") {
