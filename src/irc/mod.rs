@@ -13,6 +13,7 @@ use tokio::time::{Duration, timeout, sleep};
 
 use tracing::{error as log_error, info, warn};
 use tokio::sync::{RwLock, Mutex};
+use futures::executor::block_on;
 
 mod util;
 
@@ -173,7 +174,7 @@ impl Context {
 
     pub fn quit(&self) {
         self.shutdown.replace(true);
-        futures::executor::block_on(async {
+        block_on(async {
             loop {
                 match self.messages.try_lock() {
                     Ok(mut msgs) => {
@@ -190,7 +191,7 @@ impl Context {
     }
 
     pub fn send(&self, msg: String) {
-        futures::executor::block_on(async {
+        block_on(async {
             let mut max = 10;
             loop {
                 match self.messages.try_lock() {
@@ -304,9 +305,7 @@ impl Context {
                     if msg.command == CommandCode::Error {
                         log_error!("Got ERROR message: {}, closing down", msg);
                         self.quit();
-                        futures::executor::block_on(async {
-                            self.update().await
-                        })?;
+                        block_on(async { self.update().await })?;
                         return Err(std::io::Error::new(std::io::ErrorKind::Other, "Got irc command ERROR"));
                     }
 
