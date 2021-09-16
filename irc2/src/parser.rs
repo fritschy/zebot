@@ -7,8 +7,8 @@ pub fn parse(mut i: &[u8]) -> IResult<&[u8], Message> {
     loop {
         match parsers::message(i) {
             Ok((r, msg)) => {
-                info!("MsgBuf: {:?}", &i[.. i.len() - r.len()]);
                 info!("{:4}", msg);
+                return Ok((r, msg));
                 i = r;
                 if i.len() == 0 {
                     break;
