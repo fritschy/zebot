@@ -281,8 +281,8 @@ mod tests {
 
         let prefix = msg.prefix.unwrap();
         assert!(format!("{}", prefix) == "fritschy!~fritschy@localhost");
-        assert!(msg.command == b"PRIVMSG");
-        assert!(msg.params == [&b"#zebot-test"[..], &b"moep"[..]]);
+        assert!(msg.command == (&b"PRIVMSG"[..]).into());
+        assert!(msg.params == [&"#zebot-test"[..], &"moep"[..]]);
     }
 
     #[test]
@@ -299,8 +299,8 @@ mod tests {
 
         let prefix = msg.prefix.unwrap();
         assert!(format!("{}", prefix) == "NickServ!NickServ@services.");
-        assert!(msg.command == b"NOTICE");
-        assert!(msg.params == [&b"ZeBot"[..], &b"This nickname is registered. Please choose a different nickname, or identify via \x02/msg NickServ identify <password>\x02."[..]]);
+        assert!(msg.command == (&b"NOTICE"[..]).into());
+        assert!(msg.params == [&"ZeBot"[..], &"This nickname is registered. Please choose a different nickname, or identify via \x02/msg NickServ identify <password>\x02."[..]]);
     }
 
     #[test]
@@ -317,8 +317,8 @@ mod tests {
 
         let prefix = msg.prefix.unwrap();
         assert!(format!("{}", prefix) == "freenode-connect!frigg@freenode/utility-bot/frigg");
-        assert!(msg.command == b"PRIVMSG");
-        assert!(msg.params == [&b"ZeBot"[..], &b"\x01VERSION\x01"[..]]);
+        assert!(msg.command == (&b"PRIVMSG"[..]).into());
+        assert!(msg.params == [&"ZeBot"[..], &"\x01VERSION\x01"[..]]);
     }
 
     #[test]
