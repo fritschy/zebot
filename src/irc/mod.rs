@@ -229,12 +229,10 @@ impl Context {
         }
     }
 
-    async fn send_pending_messages(&self) -> Result<(), std::io::Error> {
+    async fn send_pending_messages(&self, connection: &mut TcpStream) -> Result<(), std::io::Error> {
         if self.messages.borrow().is_empty() {
             return Ok(());
         }
-
-        let mut connection = self.connection.borrow_mut();
 
         fn more_time(count: usize) -> u64 {
             if count > 8 {
@@ -282,11 +280,12 @@ impl Context {
             self.send(joins);
         }
 
-        self.send_pending_messages().await?;
-
-        // try to timeout ...
         let bytes = {
             let conn = &mut self.connection.borrow_mut();
+
+            self.send_pending_messages(conn).await?;
+
+            // try to timeout ...
             timeout(Duration::from_secs(5 * 60),
                     self.bufs.read_from(conn)
             ).await??
