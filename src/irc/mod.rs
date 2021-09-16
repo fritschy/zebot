@@ -12,7 +12,7 @@ pub use handler::*;
 use tokio::time::{Duration, timeout, sleep};
 
 use tracing::{error as log_error, info, warn};
-use tokio::sync::{RwLock};
+use tokio::sync::{RwLock, Mutex};
 
 mod util;
 
@@ -89,7 +89,7 @@ pub struct Context {
     pub joined_channels: RwLock<Vec<String>>,
     handlers: HashMap<CommandCode, Vec<Box<dyn MessageHandler>>>,
     allmsg_handlers: Vec<Box<dyn MessageHandler>>,
-    pub connection: RefCell<TcpStream>,
+    pub connection: Mutex<TcpStream>,
     bufs: ReaderBuf,
     messages: RefCell<Vec<String>>,
     shutdown: Cell<bool>,
@@ -102,7 +102,7 @@ impl Context {
         let c = TcpStream::connect(addr).await?;
         c.set_nodelay(true)?;
 
-        let connection = RefCell::new(c);
+        let connection = Mutex::new(c);
 
         let mut handlers: HashMap<CommandCode, Vec<Box<dyn MessageHandler>>> = HashMap::new();
         handlers.insert(CommandCode::Ping, vec![Box::new(PingHandler)]);
@@ -281,7 +281,7 @@ impl Context {
         }
 
         let bytes = {
-            let conn = &mut self.connection.borrow_mut();
+            let conn = &mut self.connection.lock().await;
 
             self.send_pending_messages(conn).await?;
 
