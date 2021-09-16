@@ -27,11 +27,11 @@ use tracing::{error as log_error, Level};
 use irc2::Message;
 
 pub fn zebot_version() -> String {
-    crate_version!().to_string()
+    format!("{} r{}", crate_version!(), env!("GIT_HASH"))
 }
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
-    info!("This is ZeBot {} r{}", zebot_version(), env!("GIT_HASH"));
+    info!("This is ZeBot {}", zebot_version());
 
     let addr = args
         .value_of("server")
@@ -563,7 +563,7 @@ fn handle(
         {
             "!version" | "!ver" => {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());
-                ctx.message(&dst, &format!("I am version {} (r{}), let's not talk about it!", crate_version!(), env!("GIT_HASH")));
+                ctx.message(&dst, &format!("I am version {}, let's not talk about it!", zebot_version()));
             }
             "!help" | "!commands" => {
                 let dst = msg.get_reponse_destination(&ctx.joined_channels.borrow());

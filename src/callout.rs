@@ -61,7 +61,7 @@ impl MessageHandler for Callouthandler {
         let cmd = std::process::Command::new(path).args(&args).output();
         let s = s.elapsed();
 
-        log_error!("Handler {} completed in {:?}", command, s);
+        info!("Handler {} completed in {:?}", command, s);
 
         match cmd {
             Ok(p) => {
