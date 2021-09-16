@@ -91,7 +91,7 @@ pub struct Context {
     allmsg_handlers: Vec<Box<dyn MessageHandler>>,
     pub connection: Mutex<TcpStream>,
     bufs: ReaderBuf,
-    messages: RefCell<Vec<String>>,
+    messages: Mutex<Vec<String>>,
     shutdown: Cell<bool>,
     last_flush: Cell<Instant>,
     password_file: String,
@@ -115,7 +115,7 @@ impl Context {
             bufs: ReaderBuf::new(),
             channels: RwLock::new(Vec::new()),
             joined_channels: RwLock::new(Vec::new()),
-            messages: RefCell::new(Vec::new()),
+            messages: Mutex::new(Vec::new()),
             shutdown: Cell::new(false),
             allmsg_handlers,
             connection,
@@ -175,7 +175,7 @@ impl Context {
         self.shutdown.replace(true);
         futures::executor::block_on(async {
             loop {
-                match self.messages.try_borrow_mut() {
+                match self.messages.try_lock() {
                     Ok(mut msgs) => {
                         msgs.clear();
                         break;
@@ -193,7 +193,7 @@ impl Context {
         futures::executor::block_on(async {
             let mut max = 10;
             loop {
-                match self.messages.try_borrow_mut() {
+                match self.messages.try_lock() {
                     Ok(mut msgs) => {
                         msgs.push(msg);
                         break;
@@ -230,7 +230,9 @@ impl Context {
     }
 
     async fn send_pending_messages(&self, connection: &mut TcpStream) -> Result<(), std::io::Error> {
-        if self.messages.borrow().is_empty() {
+        let mut messages = self.messages.lock().await;
+
+        if messages.is_empty() {
             return Ok(());
         }
 
@@ -248,7 +250,7 @@ impl Context {
             0
         };
 
-        for (count, m) in self.messages.borrow_mut().drain(..).enumerate() {
+        for (count, m) in messages.drain(..).enumerate() {
             connection.write_all(m.as_bytes()).await?;
             // This does not take into account messages sent with the previous commits...
             sleep(Duration::from_millis(400 + offset + more_time(count))).await;
