@@ -79,7 +79,7 @@ impl Message {
         if let Some(Prefix::Nickname(Nickname{nickname, ..})) = &self.prefix {
             nickname.clone()
         } else {
-            String::new() // FIXME: WAH!
+            format!("{}", self)
         }
     }
 }
