@@ -180,7 +180,7 @@ impl Context {
                         msgs.clear();
                         break;
                     }
-                    Err(_bme) => {
+                    Err(_) => {
                         sleep(Duration::from_millis(100)).await
                     }
                 }
@@ -191,6 +191,7 @@ impl Context {
 
     pub fn send(&self, msg: String) {
         futures::executor::block_on(async {
+            let mut max = 10;
             loop {
                 match self.messages.try_borrow_mut() {
                     Ok(mut msgs) => {
@@ -198,6 +199,12 @@ impl Context {
                         break;
                     }
                     Err(_) => {
+                        if max > 0 {
+                            max -= 1;
+                        } else {
+                            log_error!("Can not send message '{}'", msg);
+                            break;
+                        }
                         sleep(Duration::from_millis(100)).await
                     }
                 }
@@ -299,7 +306,7 @@ impl Context {
                         futures::executor::block_on(async {
                             self.update().await
                         })?;
-                        return Err(std::io::ErrorKind::Other.into());
+                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "Got irc command ERROR"));
                     }
 
                     for h in self.allmsg_handlers.iter() {

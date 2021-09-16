@@ -1,5 +1,5 @@
 use nom::IResult;
-use tracing::info;
+use tracing::debug;
 
 use crate::*;
 
@@ -7,7 +7,7 @@ pub fn parse(i: &[u8]) -> IResult<&[u8], Message> {
     loop {
         match parsers::message(i) {
             Ok((r, msg)) => {
-                info!("{:4}", msg);
+                debug!("{:4}", msg);
                 return Ok((r, msg));
             }
 

@@ -83,9 +83,3 @@ impl Message {
         }
     }
 }
-
-pub fn parse_ng(i: &[u8]) {
-    if let Err(x) = parser::parse(i) {
-        log_error!("Error from irc2::parse_ng: {:?}", x);
-    }
-}

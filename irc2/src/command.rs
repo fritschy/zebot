@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use tracing::error as log_error;
+use tracing::{warn, error as log_error};
 
 #[derive(Eq, PartialEq, Hash, Debug, Clone)]
 pub enum CommandCode {
@@ -38,8 +38,9 @@ impl From<&[u8]> for CommandCode {
                 b"ERROR" => CommandCode::Error,
                 b"UNKNOWN" => CommandCode::Unknown,
                 _ => {
-                    log_error!("WARNING: Fallback to generic CommandCode for {}", String::from_utf8_lossy(c));
-                    CommandCode::Generic(String::from_utf8_lossy(c).to_string())
+                    let c = String::from_utf8_lossy(c);
+                    warn!("WARNING: Fallback to generic CommandCode for {}", c);
+                    CommandCode::Generic(c.to_string())
                 }
             }
         }
@@ -60,7 +61,7 @@ impl Display for CommandCode {
             CommandCode::Error => write!(f, "ERROR")?,
             CommandCode::Unknown => write!(f, "UNKNOWN")?,
             CommandCode::Numeric(n) => write!(f, "{:03}", n)?,
-            CommandCode::Generic(n) => write!(f, "{}", n)?,
+            CommandCode::Generic(n) => write!(f, "'{}'", n)?,
         }
         Ok(())
     }
