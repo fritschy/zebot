@@ -30,7 +30,13 @@ use irc2::Message;
 use futures::executor::block_on;
 
 pub fn zebot_version() -> String {
-    format!("{} r{}", crate_version!(), env!("GIT_HASH"))
+    // See build.rs
+    let rev_info = env!("GIT_REV_INFO");
+    if rev_info != "0" {
+        format!("{} {}", crate_version!(), rev_info)
+    } else {
+        crate_version!().to_string()
+    }
 }
 
 async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
