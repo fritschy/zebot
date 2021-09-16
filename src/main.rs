@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::{BufRead, BufReader, Write, Error};
 use std::net::ToSocketAddrs;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::prelude::*;
 
@@ -26,8 +26,9 @@ mod callout;
 use crate::callout::Callouthandler;
 use tracing_subscriber::FmtSubscriber;
 use tracing::{error as log_error, Level};
-use irc2::Message;
+use irc2::{Message, Prefix};
 use futures::executor::block_on;
+use std::borrow::Borrow;
 
 pub fn zebot_version() -> String {
     // See build.rs
@@ -71,7 +72,7 @@ async fn async_main(args: &clap::ArgMatches<'_>) -> std::io::Result<()> {
     context.register_handler(CommandCode::PrivMsg, Box::new(YoutubeTitleHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(Callouthandler));
     context.register_handler(CommandCode::Join, Box::new(GreetHandler));
-    context.register_handler(CommandCode::PrivMsg, Box::new(ZeBotAnswerHandler));
+    context.register_handler(CommandCode::PrivMsg, Box::new(ZeBotAnswerHandler::new()));
     context.register_handler(CommandCode::PrivMsg, Box::new(MiscCommandsHandler));
     context.register_handler(CommandCode::PrivMsg, Box::new(SubstituteLastHandler::new()));
     context.register_handler(CommandCode::PrivMsg, Box::new(URLCollector::new()));
@@ -529,7 +530,17 @@ impl MessageHandler for SubstituteLastHandler {
     }
 }
 
-struct ZeBotAnswerHandler;
+struct ZeBotAnswerHandler {
+    last: RefCell<HashMap<Prefix, Instant>>,
+}
+
+impl ZeBotAnswerHandler {
+    fn new() -> Self {
+        Self {
+            last: RefCell::new(HashMap::new()),
+        }
+    }
+}
 
 impl MessageHandler for ZeBotAnswerHandler {
     fn handle(
@@ -538,12 +549,26 @@ impl MessageHandler for ZeBotAnswerHandler {
         msg: &Message,
     ) -> Result<HandlerResult, std::io::Error> {
         if msg.params.len() > 1 && msg.params[1..].iter().any(|x| x.contains(ctx.nick())) {
+            let now = Instant::now();
+            let mut last = self.last.borrow_mut();
+            let pfx = msg.prefix.as_ref().unwrap();
+            if last.contains_key(pfx) {
+                let last_ts = *last.get(pfx).unwrap();
+                last.entry(pfx.clone()).and_modify(|x| *x = now);
+                if now.duration_since(last_ts) < Duration::from_secs(2) {
+                    return Ok(HandlerResult::NotInterested);
+                }
+            } else {
+                last.entry(pfx.clone()).or_insert_with(|| now);
+            }
+
             // It would seem, I need some utility functions to retrieve message semantics
             let m = if thread_rng().gen_bool(0.93) {
                 nag_user(&msg.get_nick())
             } else {
                 format!("Hey {}", &msg.get_nick())
             };
+
             let dst = msg.get_reponse_destination(&block_on(async {ctx.joined_channels.read().await}));
             ctx.message(&dst, &m);
         }

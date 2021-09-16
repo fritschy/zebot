@@ -7,7 +7,7 @@ pub mod command;
 
 pub use parser::parse;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum Prefix {
     Server(String),
     Nickname(Nickname),
@@ -22,7 +22,7 @@ impl Display for Prefix {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct Nickname {
     nickname: String,
     // XXX: in rfc2812 this should actually be an host: Option<(Option<user>, host)>
