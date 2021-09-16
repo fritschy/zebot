@@ -7,6 +7,7 @@ pub(crate) fn parse(mut i: &[u8]) -> IResult<&[u8], ()> {
     loop {
         match parsers::message(i) {
             Ok((r, msg)) => {
+                info!("MsgBuf: {:?}", &i[.. i.len() - r.len()]);
                 info!("{:4}", msg);
                 i = r;
                 if i.len() == 0 {
